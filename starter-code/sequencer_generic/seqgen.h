@@ -18,17 +18,16 @@
 #define DT_SCALING_UNCERTAINTY_NANOSEC (500000)
 
 // default to 10 millisecond, 100 Hz
-#define RTSEQ_DELAY_NSEC 		(10000000)
+#define RTSEQ_DELAY_NSEC (10000000)
 
 // default to 1 millisecond, 1000 Hz
 //#define RTSEQ_DELAY_NSEC 		( 1000000)
 
 typedef struct
 {
-    int threadIdx;
-    unsigned long long sequencePeriods;
+  int threadIdx;
+  unsigned long long sequencePeriods;
 } threadParams_t;
-
 
 double getTimeMsec(void);
 void print_scheduler(void);

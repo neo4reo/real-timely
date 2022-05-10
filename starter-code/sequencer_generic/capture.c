@@ -6,7 +6,7 @@
  *
  *  The original code adapted was open source from V4L2 API and had the
  *  following use and incorporation policy:
- * 
+ *
  *  This program can be used and distributed without restrictions.
  *
  *      This program is provided with the V4L2 API
@@ -17,13 +17,12 @@ int v4l2_frame_acquisition_loop(char *dev_name);
 
 int main(int argc, char **argv)
 {
-    char *dev_name;
+  char *dev_name;
 
-    if(argc > 1)
-        dev_name = argv[1];
-    else
-        dev_name = "/dev/video0";
+  if (argc > 1)
+    dev_name = argv[1];
+  else
+    dev_name = "/dev/video0";
 
-    v4l2_frame_acquisition_loop(dev_name);
-
+  v4l2_frame_acquisition_loop(dev_name);
 }
