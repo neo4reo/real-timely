@@ -1,12 +1,12 @@
-INCLUDE_DIRS = 
-LIB_DIRS = 
+INCLUDE_DIRS=
+LIB_DIRS=
 CC=gcc
 
 CDEFS=
-CFLAGS= -O0 -g -Wcpp $(INCLUDE_DIRS) $(CDEFS)
+CFLAGS= -O0 -g -Wcpp -Wall $(INCLUDE_DIRS) $(CDEFS)
 LIBS= -lrt
 
-HFILES= 
+HFILES=
 CFILES= capture.c
 
 SRCS= ${HFILES} ${CFILES}
@@ -22,7 +22,7 @@ distclean:
 	-rm -f *.o *.d
 
 capture: ${OBJS}
-	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $@.o $(LIBS)
+	$(CC) $(LDFLAGS) ../utils/*.c $(CFLAGS) -o $@ $@.o $(LIBS)
 
 depend:
 

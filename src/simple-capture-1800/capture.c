@@ -1,4 +1,7 @@
 /*
+ *  Adapted by Nick McCrea. Original preamble is below:
+ *
+ *  ---
  *
  *  Adapted by Sam Siewert for use with UVC web cameras and Bt878 frame
  *  grabber NTSC cameras to acquire digital video from a source,
@@ -13,25 +16,23 @@
  * see http://linuxtv.org/docs.php for more information
  */
 
+#include <assert.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <getopt.h>
+#include <linux/videodev2.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
-
-#include <getopt.h> /* getopt_long() */
-
-#include <fcntl.h> /* low-level i/o */
-#include <unistd.h>
-#include <errno.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/time.h>
-#include <sys/mman.h>
 #include <sys/ioctl.h>
-
-#include <linux/videodev2.h>
-
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/types.h>
 #include <time.h>
+#include <unistd.h>
+#include "../utils/error.h"
+#include "../utils/time.h"
 
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
 
@@ -40,73 +41,48 @@
 #define HRES_STR "640"
 #define VRES_STR "480"
 
-//#define HRES 320
-//#define VRES 240
-//#define HRES_STR "320"
-//#define VRES_STR "240"
-
+#define DEVICE_BUFFERS_TO_REQUEST (6)
 #define START_UP_FRAMES (8)
 #define LAST_FRAMES (1)
 #define CAPTURE_FRAMES (1800 + LAST_FRAMES)
 #define FRAMES_TO_ACQUIRE (CAPTURE_FRAMES + START_UP_FRAMES + LAST_FRAMES)
-
-//#define FRAMES_PER_SEC (1)
-//#define FRAMES_PER_SEC (10)
-//#define FRAMES_PER_SEC (20)
-//#define FRAMES_PER_SEC (25)
-#define FRAMES_PER_SEC (30)
+#define FRAMES_PER_SECOND (30)
 
 //#define COLOR_CONVERT_RGB
 #define DUMP_FRAMES
 
 // Format is used by a number of functions, so made as a file global
-static struct v4l2_format fmt;
+static struct v4l2_format video_format;
 
-enum io_method
-{
-  IO_METHOD_READ,
-  IO_METHOD_MMAP,
-  IO_METHOD_USERPTR,
-};
-
-struct buffer
+struct device_buffer_info
 {
   void *start;
   size_t length;
 };
 
-static char *dev_name;
-// static enum io_method   io = IO_METHOD_USERPTR;
-// static enum io_method   io = IO_METHOD_READ;
-static enum io_method io = IO_METHOD_MMAP;
-static int fd = -1;
-struct buffer *buffers;
-static unsigned int n_buffers;
+static char *device_name;
+static int device_file_descriptor = -1;
+struct device_buffer_info *device_buffer_infos;
+static unsigned int number_of_device_buffers;
 static int out_buf;
 static int force_format = 1;
 
 static int frame_count = (FRAMES_TO_ACQUIRE);
 
-static double fnow = 0.0, fstart = 0.0, fstop = 0.0;
 static struct timespec time_now, time_start, time_stop;
 
-static void errno_exit(const char *s)
+/**
+ * @brief Call `ioctl()`, retrying if the function call is interrupted by a
+ * software signal.
+ */
+static int signal_safe_ioctl(int descriptor, int request, void *arg)
 {
-  fprintf(stderr, "%s error %d, %s\n", s, errno, strerror(errno));
-  exit(EXIT_FAILURE);
-}
-
-static int xioctl(int fh, int request, void *arg)
-{
-  int r;
-
+  int result;
   do
   {
-    r = ioctl(fh, request, arg);
-
-  } while (-1 == r && EINTR == errno);
-
-  return r;
+    result = ioctl(descriptor, request, arg);
+  } while (result == -1 && errno == EINTR);
+  return result;
 }
 
 char ppm_header[] = "P6\n#9999999999 sec 9999999999 msec \n" HRES_STR " " VRES_STR "\n255\n";
@@ -114,7 +90,7 @@ char ppm_dumpname[] = "frames/test0000.ppm";
 
 static void dump_ppm(const void *p, int size, unsigned int tag, struct timespec *time)
 {
-  int written, i, total, dumpfd;
+  int written, total, dumpfd;
 
   snprintf(&ppm_dumpname[11], 9, "%04d", tag);
   strncat(&ppm_dumpname[15], ".ppm", 5);
@@ -137,8 +113,7 @@ static void dump_ppm(const void *p, int size, unsigned int tag, struct timespec 
   } while (total < size);
 
   clock_gettime(CLOCK_MONOTONIC, &time_now);
-  fnow = (double)time_now.tv_sec + (double)time_now.tv_nsec / 1000000000.0;
-  printf("Frame written to flash at %lf, %d, bytes\n", (fnow - fstart), total);
+  printf("Frame written to flash at %lf, %d, bytes\n", get_elapsed_time_in_seconds(&time_start, &time_now), total);
 
   close(dumpfd);
 }
@@ -148,7 +123,7 @@ char pgm_dumpname[] = "frames/test0000.pgm";
 
 static void dump_pgm(const void *p, int size, unsigned int tag, struct timespec *time)
 {
-  int written, i, total, dumpfd;
+  int written, total, dumpfd;
 
   snprintf(&pgm_dumpname[11], 9, "%04d", tag);
   strncat(&pgm_dumpname[15], ".pgm", 5);
@@ -171,8 +146,7 @@ static void dump_pgm(const void *p, int size, unsigned int tag, struct timespec 
   } while (total < size);
 
   clock_gettime(CLOCK_MONOTONIC, &time_now);
-  fnow = (double)time_now.tv_sec + (double)time_now.tv_nsec / 1000000000.0;
-  printf("Frame written to flash at %lf, %d, bytes\n", (fnow - fstart), total);
+  printf("Frame written to flash at %lf, %d, bytes\n", get_elapsed_time_in_seconds(&time_start, &time_now), total);
 
   close(dumpfd);
 }
@@ -243,28 +217,24 @@ void yuv2rgb(int y, int u, int v, unsigned char *r, unsigned char *g, unsigned c
 }
 
 // always ignore first 8 frames
-int framecnt = -8;
+int frames_processed = -8;
 
 unsigned char bigbuffer[(1280 * 960)];
 
 static void process_image(const void *p, int size)
 {
-  int i, newi, newsize = 0;
+  int i, newi;
   struct timespec frame_time;
-  int y_temp, y2_temp, u_temp, v_temp;
   unsigned char *pptr = (unsigned char *)p;
 
   // record when process was called
   clock_gettime(CLOCK_REALTIME, &frame_time);
 
-  framecnt++;
-  printf("frame %d: ", framecnt);
+  frames_processed++;
+  printf("frame %d: ", frames_processed);
 
-  if (framecnt == 0)
-  {
+  if (frames_processed == 0)
     clock_gettime(CLOCK_MONOTONIC, &time_start);
-    fstart = (double)time_start.tv_sec + (double)time_start.tv_nsec / 1000000000.0;
-  }
 
 #ifdef DUMP_FRAMES
 
@@ -272,13 +242,13 @@ static void process_image(const void *p, int size)
   // processing you wish.
   //
 
-  if (fmt.fmt.pix.pixelformat == V4L2_PIX_FMT_GREY)
+  if (video_format.fmt.pix.pixelformat == V4L2_PIX_FMT_GREY)
   {
     printf("Dump graymap as-is size %d\n", size);
-    dump_pgm(p, size, framecnt, &frame_time);
+    dump_pgm(p, size, frames_processed, &frame_time);
   }
 
-  else if (fmt.fmt.pix.pixelformat == V4L2_PIX_FMT_YUYV)
+  else if (video_format.fmt.pix.pixelformat == V4L2_PIX_FMT_YUYV)
   {
 
 #if defined(COLOR_CONVERT_RGB)
@@ -313,18 +283,18 @@ static void process_image(const void *p, int size)
       bigbuffer[newi + 1] = pptr[i + 2];
     }
 
-    if (framecnt > -1)
+    if (frames_processed > -1)
     {
-      dump_pgm(bigbuffer, (size / 2), framecnt, &frame_time);
+      dump_pgm(bigbuffer, (size / 2), frames_processed, &frame_time);
       printf("Dump YUYV converted to YY size %d\n", size);
     }
 #endif
   }
 
-  else if (fmt.fmt.pix.pixelformat == V4L2_PIX_FMT_RGB24)
+  else if (video_format.fmt.pix.pixelformat == V4L2_PIX_FMT_RGB24)
   {
     printf("Dump RGB as-is size %d\n", size);
-    dump_ppm(p, size, framecnt, &frame_time);
+    dump_ppm(p, size, frames_processed, &frame_time);
   }
   else
   {
@@ -337,613 +307,337 @@ static void process_image(const void *p, int size)
 static int read_frame(void)
 {
   struct v4l2_buffer buf;
-  unsigned int i;
 
-  switch (io)
+  CLEAR(buf);
+
+  buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+  buf.memory = V4L2_MEMORY_MMAP;
+
+  if (-1 == signal_safe_ioctl(device_file_descriptor, VIDIOC_DQBUF, &buf))
   {
-
-  case IO_METHOD_READ:
-    if (-1 == read(fd, buffers[0].start, buffers[0].length))
+    switch (errno)
     {
-      switch (errno)
-      {
+    case EAGAIN:
+      return 0;
 
-      case EAGAIN:
-        return 0;
+    case EIO:
+      /* Could ignore EIO, but drivers should only set for serious errors, although some set for
+         non-fatal errors too.
+       */
+      return 0;
 
-      case EIO:
-        /* Could ignore EIO, see spec. */
-
-        /* fall through */
-
-      default:
-        errno_exit("read");
-      }
+    default:
+      printf("mmap failure\n");
+      print_error_number_and_exit("VIDIOC_DQBUF");
     }
-
-    process_image(buffers[0].start, buffers[0].length);
-    break;
-
-  case IO_METHOD_MMAP:
-    CLEAR(buf);
-
-    buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    buf.memory = V4L2_MEMORY_MMAP;
-
-    if (-1 == xioctl(fd, VIDIOC_DQBUF, &buf))
-    {
-      switch (errno)
-      {
-      case EAGAIN:
-        return 0;
-
-      case EIO:
-        /* Could ignore EIO, but drivers should only set for serious errors, although some set for
-           non-fatal errors too.
-         */
-        return 0;
-
-      default:
-        printf("mmap failure\n");
-        errno_exit("VIDIOC_DQBUF");
-      }
-    }
-
-    assert(buf.index < n_buffers);
-
-    process_image(buffers[buf.index].start, buf.bytesused);
-
-    if (-1 == xioctl(fd, VIDIOC_QBUF, &buf))
-      errno_exit("VIDIOC_QBUF");
-    break;
-
-  case IO_METHOD_USERPTR:
-    CLEAR(buf);
-
-    buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    buf.memory = V4L2_MEMORY_USERPTR;
-
-    if (-1 == xioctl(fd, VIDIOC_DQBUF, &buf))
-    {
-      switch (errno)
-      {
-      case EAGAIN:
-        return 0;
-
-      case EIO:
-        /* Could ignore EIO, see spec. */
-
-        /* fall through */
-
-      default:
-        errno_exit("VIDIOC_DQBUF");
-      }
-    }
-
-    for (i = 0; i < n_buffers; ++i)
-      if (buf.m.userptr == (unsigned long)buffers[i].start && buf.length == buffers[i].length)
-        break;
-
-    assert(i < n_buffers);
-
-    process_image((void *)buf.m.userptr, buf.bytesused);
-
-    if (-1 == xioctl(fd, VIDIOC_QBUF, &buf))
-      errno_exit("VIDIOC_QBUF");
-    break;
   }
+
+  assert(buf.index < number_of_device_buffers);
+
+  process_image(device_buffer_infos[buf.index].start, buf.bytesused);
+
+  if (-1 == signal_safe_ioctl(device_file_descriptor, VIDIOC_QBUF, &buf))
+    print_error_number_and_exit("VIDIOC_QBUF");
 
   // printf("R");
   return 1;
 }
 
-static void mainloop(void)
+/**
+ * @brief Capture the prescribed number of frames from the stream.
+ */
+static void capture_frames(void)
 {
-  unsigned int count;
-  struct timespec read_delay;
-  struct timespec time_error;
+  // Set capture rate
+  printf("Capturing frames at %u frames per second\n", FRAMES_PER_SECOND);
+  struct timespec frame_capture_delay;
+  frame_capture_delay.tv_sec = 0;
+  frame_capture_delay.tv_nsec = NANOSECONDS_PER_SECOND / FRAMES_PER_SECOND;
 
-  // Replace this with a delay designed for your rate
-  // of frame acquitision and storage.
-  //
-
-#if (FRAMES_PER_SEC == 1)
-  printf("Running at 1 frame/sec\n");
-  read_delay.tv_sec = 1;
-  read_delay.tv_nsec = 0;
-#elif (FRAMES_PER_SEC == 10)
-  printf("Running at 10 frames/sec\n");
-  read_delay.tv_sec = 0;
-  read_delay.tv_nsec = 100000000;
-#elif (FRAMES_PER_SEC == 20)
-  printf("Running at 20 frames/sec\n");
-  read_delay.tv_sec = 0;
-  read_delay.tv_nsec = 49625000;
-#elif (FRAMES_PER_SEC == 25)
-  printf("Running at 25 frames/sec\n");
-  read_delay.tv_sec = 0;
-  read_delay.tv_nsec = 39625000;
-#elif (FRAMES_PER_SEC == 30)
-  printf("Running at 30 frames/sec\n");
-  read_delay.tv_sec = 0;
-  read_delay.tv_nsec = 33333333;
-#else
-  printf("Running at 1 frame/sec\n");
-  read_delay.tv_sec = 1;
-  read_delay.tv_nsec = 0;
-#endif
-
-  count = frame_count;
-
-  while (count > 0)
+  // Capture frames
+  struct timespec nanosleep_time_remaining;
+  unsigned int frames_remaining = frame_count;
+  while (frames_remaining > 0)
   {
-    for (;;)
+    // Prepare to select using the device file descriptor.
+    fd_set file_descriptor_set;
+    FD_ZERO(&file_descriptor_set);
+    FD_SET(device_file_descriptor, &file_descriptor_set);
+
+    // Await ready frames
+    struct timeval timeout;
+    timeout.tv_sec = 2;
+    timeout.tv_usec = 0;
+    int number_of_set_descriptors = select(device_file_descriptor + 1, &file_descriptor_set, NULL, NULL, &timeout);
+
+    // Validate that select() succeeded.
+    if (-1 == number_of_set_descriptors)
     {
-      fd_set fds;
-      struct timeval tv;
-      int r;
+      if (EINTR == errno)
+        continue;
+      print_error_number_and_exit("select()");
+    }
+    if (0 == number_of_set_descriptors)
+      print_error_and_exit("`select()` timed out\n");
 
-      FD_ZERO(&fds);
-      FD_SET(fd, &fds);
-
-      /* Timeout. */
-      tv.tv_sec = 2;
-      tv.tv_usec = 0;
-
-      r = select(fd + 1, &fds, NULL, NULL, &tv);
-
-      if (-1 == r)
+    if (read_frame())
+    {
+      if (nanosleep(&frame_capture_delay, &nanosleep_time_remaining) != 0)
+        perror("nanosleep()");
+      else
       {
-        if (EINTR == errno)
-          continue;
-        errno_exit("select");
-      }
-
-      if (0 == r)
-      {
-        fprintf(stderr, "select timeout\n");
-        exit(EXIT_FAILURE);
-      }
-
-      if (read_frame())
-      {
-        if (nanosleep(&read_delay, &time_error) != 0)
-          perror("nanosleep");
+        if (frames_processed > 1)
+        {
+          clock_gettime(CLOCK_MONOTONIC, &time_now);
+          printf(" read at %lf, @ %lf FPS\n", get_elapsed_time_in_seconds(&time_start, &time_now), (double)(frames_processed + 1) / get_elapsed_time_in_seconds(&time_start, &time_now));
+        }
         else
         {
-          if (framecnt > 1)
-          {
-            clock_gettime(CLOCK_MONOTONIC, &time_now);
-            fnow = (double)time_now.tv_sec + (double)time_now.tv_nsec / 1000000000.0;
-            printf(" read at %lf, @ %lf FPS\n", (fnow - fstart), (double)(framecnt + 1) / (fnow - fstart));
-          }
-          else
-          {
-            printf("at %lf\n", fnow);
-          }
+          printf("at %lf\n", get_time_in_seconds(&time_now));
         }
-
-        count--;
-        break;
       }
 
-      /* EAGAIN - continue select loop unless count done. */
-      if (count <= 0)
-        break;
+      frames_remaining--;
     }
-
-    if (count <= 0)
-      break;
   }
 
   clock_gettime(CLOCK_MONOTONIC, &time_stop);
-  fstop = (double)time_stop.tv_sec + (double)time_stop.tv_nsec / 1000000000.0;
 }
 
-static void stop_capturing(void)
+/**
+ * @brief Stop streaming frames and turn off the camera.
+ */
+static void stop_streaming(void)
 {
-  enum v4l2_buf_type type;
-
-  switch (io)
-  {
-  case IO_METHOD_READ:
-    /* Nothing to do. */
-    break;
-
-  case IO_METHOD_MMAP:
-  case IO_METHOD_USERPTR:
-    type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    if (-1 == xioctl(fd, VIDIOC_STREAMOFF, &type))
-      errno_exit("VIDIOC_STREAMOFF");
-    break;
-  }
+  enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+  if (-1 == signal_safe_ioctl(device_file_descriptor, VIDIOC_STREAMOFF, &type))
+    print_error_number_and_exit("VIDIOC_STREAMOFF");
 }
 
-static void start_capturing(void)
+/**
+ * @brief Turn on the camera and begin capturing frames.
+ */
+static void start_streaming()
 {
-  unsigned int i;
-  enum v4l2_buf_type type;
-
-  switch (io)
+  // Enqueue all of the device buffers
+  for (unsigned int index = 0; index < number_of_device_buffers; ++index)
   {
+    struct v4l2_buffer v4l2_buffer_description;
+    CLEAR(v4l2_buffer_description);
+    v4l2_buffer_description.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    v4l2_buffer_description.memory = V4L2_MEMORY_MMAP;
+    v4l2_buffer_description.index = index;
 
-  case IO_METHOD_READ:
-    /* Nothing to do. */
-    break;
-
-  case IO_METHOD_MMAP:
-    for (i = 0; i < n_buffers; ++i)
-    {
-      printf("allocated buffer %d\n", i);
-      struct v4l2_buffer buf;
-
-      CLEAR(buf);
-      buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-      buf.memory = V4L2_MEMORY_MMAP;
-      buf.index = i;
-
-      if (-1 == xioctl(fd, VIDIOC_QBUF, &buf))
-        errno_exit("VIDIOC_QBUF");
-    }
-    type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    if (-1 == xioctl(fd, VIDIOC_STREAMON, &type))
-      errno_exit("VIDIOC_STREAMON");
-    break;
-
-  case IO_METHOD_USERPTR:
-    for (i = 0; i < n_buffers; ++i)
-    {
-      struct v4l2_buffer buf;
-
-      CLEAR(buf);
-      buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-      buf.memory = V4L2_MEMORY_USERPTR;
-      buf.index = i;
-      buf.m.userptr = (unsigned long)buffers[i].start;
-      buf.length = buffers[i].length;
-
-      if (-1 == xioctl(fd, VIDIOC_QBUF, &buf))
-        errno_exit("VIDIOC_QBUF");
-    }
-    type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    if (-1 == xioctl(fd, VIDIOC_STREAMON, &type))
-      errno_exit("VIDIOC_STREAMON");
-    break;
+    printf("Enqueueing device buffer %d\n", index);
+    if (-1 == signal_safe_ioctl(device_file_descriptor, VIDIOC_QBUF, &v4l2_buffer_description))
+      print_error_number_and_exit("VIDIOC_QBUF");
   }
+
+  enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+  if (-1 == signal_safe_ioctl(device_file_descriptor, VIDIOC_STREAMON, &type))
+    print_error_number_and_exit("VIDIOC_STREAMON");
 }
 
-static void uninit_device(void)
+/**
+ * @brief Relase all memory-mapping resources.
+ */
+static void uninitialize_mmap(void)
 {
-  unsigned int i;
+  for (unsigned int index = 0; index < number_of_device_buffers; ++index)
+    if (-1 == munmap(device_buffer_infos[index].start, device_buffer_infos[index].length))
+      print_error_number_and_exit("munmap");
 
-  switch (io)
-  {
-  case IO_METHOD_READ:
-    free(buffers[0].start);
-    break;
-
-  case IO_METHOD_MMAP:
-    for (i = 0; i < n_buffers; ++i)
-      if (-1 == munmap(buffers[i].start, buffers[i].length))
-        errno_exit("munmap");
-    break;
-
-  case IO_METHOD_USERPTR:
-    for (i = 0; i < n_buffers; ++i)
-      free(buffers[i].start);
-    break;
-  }
-
-  free(buffers);
+  free(device_buffer_infos);
 }
 
-static void init_read(unsigned int buffer_size)
+/**
+ * @brief Initialize memory-mapped frame buffers for the video device to write
+ * to.
+ */
+static void initialize_mmap(void)
 {
-  buffers = calloc(1, sizeof(*buffers));
+  // Prepare the request
+  struct v4l2_requestbuffers device_buffers_description;
+  CLEAR(device_buffers_description);
+  device_buffers_description.count = DEVICE_BUFFERS_TO_REQUEST;
+  device_buffers_description.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+  device_buffers_description.memory = V4L2_MEMORY_MMAP;
 
-  if (!buffers)
-  {
-    fprintf(stderr, "Out of memory\n");
-    exit(EXIT_FAILURE);
-  }
-
-  buffers[0].length = buffer_size;
-  buffers[0].start = malloc(buffer_size);
-
-  if (!buffers[0].start)
-  {
-    fprintf(stderr, "Out of memory\n");
-    exit(EXIT_FAILURE);
-  }
-}
-
-static void init_mmap(void)
-{
-  struct v4l2_requestbuffers req;
-
-  CLEAR(req);
-
-  req.count = 6;
-  req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-  req.memory = V4L2_MEMORY_MMAP;
-
-  if (-1 == xioctl(fd, VIDIOC_REQBUFS, &req))
+  // Request the buffers
+  if (-1 == signal_safe_ioctl(device_file_descriptor, VIDIOC_REQBUFS, &device_buffers_description))
   {
     if (EINVAL == errno)
-    {
-      fprintf(stderr, "%s does not support "
-                      "memory mapping\n",
-              dev_name);
-      exit(EXIT_FAILURE);
-    }
+      print_error_and_exit("%s does not support memory mapping\n", device_name);
     else
-    {
-      errno_exit("VIDIOC_REQBUFS");
-    }
+      print_error_number_and_exit("VIDIOC_REQBUFS");
   }
 
-  if (req.count < 2)
+  // Validate that enough buffers were reserved
+  number_of_device_buffers = device_buffers_description.count;
+  if (number_of_device_buffers < 2)
+    print_error_and_exit("Insufficient buffer memory on %s\n", device_name);
+
+  // Allocate memory for buffer information
+  device_buffer_infos = calloc(number_of_device_buffers, sizeof(*device_buffer_infos));
+  if (!device_buffer_infos)
+    print_error_and_exit("Out of memory\n");
+
+  // Initialize each allocated device buffer.
+  // TODO NICK: Original code seemed to leave `number_of_device_buffers` at one too many. Check if this is an issue.
+  for (unsigned int device_buffer_index = 0; device_buffer_index < number_of_device_buffers; ++device_buffer_index)
   {
-    fprintf(stderr, "Insufficient buffer memory on %s\n", dev_name);
-    exit(EXIT_FAILURE);
-  }
+    struct v4l2_buffer v4l2_buffer_description;
+    CLEAR(v4l2_buffer_description);
+    v4l2_buffer_description.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    v4l2_buffer_description.memory = V4L2_MEMORY_MMAP;
+    v4l2_buffer_description.index = device_buffer_index;
 
-  buffers = calloc(req.count, sizeof(*buffers));
+    if (-1 == signal_safe_ioctl(device_file_descriptor, VIDIOC_QUERYBUF, &v4l2_buffer_description))
+      print_error_number_and_exit("VIDIOC_QUERYBUF");
 
-  if (!buffers)
-  {
-    fprintf(stderr, "Out of memory\n");
-    exit(EXIT_FAILURE);
-  }
+    device_buffer_infos[device_buffer_index].length = v4l2_buffer_description.length;
+    device_buffer_infos[device_buffer_index].start =
+        mmap(NULL,
+             v4l2_buffer_description.length,
+             PROT_READ | PROT_WRITE,
+             MAP_SHARED,
+             device_file_descriptor,
+             v4l2_buffer_description.m.offset);
 
-  for (n_buffers = 0; n_buffers < req.count; ++n_buffers)
-  {
-    struct v4l2_buffer buf;
-
-    CLEAR(buf);
-
-    buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    buf.memory = V4L2_MEMORY_MMAP;
-    buf.index = n_buffers;
-
-    if (-1 == xioctl(fd, VIDIOC_QUERYBUF, &buf))
-      errno_exit("VIDIOC_QUERYBUF");
-
-    buffers[n_buffers].length = buf.length;
-    buffers[n_buffers].start =
-        mmap(NULL /* start anywhere */,
-             buf.length,
-             PROT_READ | PROT_WRITE /* required */,
-             MAP_SHARED /* recommended */,
-             fd, buf.m.offset);
-
-    if (MAP_FAILED == buffers[n_buffers].start)
-      errno_exit("mmap");
+    if (MAP_FAILED == device_buffer_infos[device_buffer_index].start)
+      print_error_number_and_exit("mmap");
   }
 }
 
-static void init_userp(unsigned int buffer_size)
+/**
+ * @brief Validate the device's capabilities.
+ */
+static void validate_device_capabilies()
 {
-  struct v4l2_requestbuffers req;
+  struct v4l2_capability device_capabilities;
 
-  CLEAR(req);
-
-  req.count = 4;
-  req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-  req.memory = V4L2_MEMORY_USERPTR;
-
-  if (-1 == xioctl(fd, VIDIOC_REQBUFS, &req))
+  if (-1 == signal_safe_ioctl(device_file_descriptor, VIDIOC_QUERYCAP, &device_capabilities))
   {
-    if (EINVAL == errno)
-    {
-      fprintf(stderr, "%s does not support "
-                      "user pointer i/o\n",
-              dev_name);
-      exit(EXIT_FAILURE);
-    }
+    if (errno == EINVAL)
+      print_error_and_exit("%s is not a V4L2 device.\n", device_name);
     else
-    {
-      errno_exit("VIDIOC_REQBUFS");
-    }
+      print_error_number_and_exit("VIDIOC_QUERYCAP");
   }
 
-  buffers = calloc(4, sizeof(*buffers));
+  if (!(device_capabilities.capabilities & V4L2_CAP_VIDEO_CAPTURE))
+    print_error_and_exit("%s is no video capture device\n", device_name);
 
-  if (!buffers)
-  {
-    fprintf(stderr, "Out of memory\n");
-    exit(EXIT_FAILURE);
-  }
-
-  for (n_buffers = 0; n_buffers < 4; ++n_buffers)
-  {
-    buffers[n_buffers].length = buffer_size;
-    buffers[n_buffers].start = malloc(buffer_size);
-
-    if (!buffers[n_buffers].start)
-    {
-      fprintf(stderr, "Out of memory\n");
-      exit(EXIT_FAILURE);
-    }
-  }
+  if (!(device_capabilities.capabilities & V4L2_CAP_STREAMING))
+    print_error_and_exit("%s does not support streaming i/o\n", device_name);
 }
 
-static void init_device(void)
+/**
+ * @brief Configure the video output format.
+ */
+static void configure_device_format()
 {
-  struct v4l2_capability cap;
-  struct v4l2_cropcap cropcap;
+  // Check the video device's cropping capabilities.
+  struct v4l2_cropcap crop_capabilies;
+  CLEAR(crop_capabilies);
+  crop_capabilies.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+  if (0 != signal_safe_ioctl(device_file_descriptor, VIDIOC_CROPCAP, &crop_capabilies))
+    print_error_number_and_exit("VIDIOC_CROPCAP");
+
+  // Configure the device crop.
   struct v4l2_crop crop;
-  unsigned int min;
-
-  if (-1 == xioctl(fd, VIDIOC_QUERYCAP, &cap))
+  crop.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+  crop.c = crop_capabilies.defrect; // Sets crop to default.
+  if (0 != signal_safe_ioctl(device_file_descriptor, VIDIOC_S_CROP, &crop))
   {
-    if (EINVAL == errno)
+    switch (errno)
     {
-      fprintf(stderr, "%s is no V4L2 device\n",
-              dev_name);
-      exit(EXIT_FAILURE);
-    }
-    else
-    {
-      errno_exit("VIDIOC_QUERYCAP");
-    }
-  }
-
-  if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE))
-  {
-    fprintf(stderr, "%s is no video capture device\n",
-            dev_name);
-    exit(EXIT_FAILURE);
-  }
-
-  switch (io)
-  {
-  case IO_METHOD_READ:
-    if (!(cap.capabilities & V4L2_CAP_READWRITE))
-    {
-      fprintf(stderr, "%s does not support read i/o\n",
-              dev_name);
-      exit(EXIT_FAILURE);
-    }
-    break;
-
-  case IO_METHOD_MMAP:
-  case IO_METHOD_USERPTR:
-    if (!(cap.capabilities & V4L2_CAP_STREAMING))
-    {
-      fprintf(stderr, "%s does not support streaming i/o\n",
-              dev_name);
-      exit(EXIT_FAILURE);
-    }
-    break;
-  }
-
-  /* Select video input, video standard and tune here. */
-
-  CLEAR(cropcap);
-
-  cropcap.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-
-  if (0 == xioctl(fd, VIDIOC_CROPCAP, &cropcap))
-  {
-    crop.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    crop.c = cropcap.defrect; /* reset to default */
-
-    if (-1 == xioctl(fd, VIDIOC_S_CROP, &crop))
-    {
-      switch (errno)
-      {
-      case EINVAL:
-        /* Cropping not supported. */
-        break;
-      default:
-        /* Errors ignored. */
-        break;
-      }
+    case EINVAL:
+      print_error_and_exit("Device does not support cropping.\n");
+      break;
+    default:
+      // According to the starter code, it appears to be okay to ignore other
+      // errors.
+      // print_error_number_and_exit("VIDIOC_S_CROP");
+      break;
     }
   }
-  else
-  {
-    /* Errors ignored. */
-  }
 
-  CLEAR(fmt);
-
-  fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-
+  // Configure the video format.
+  CLEAR(video_format);
+  video_format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   if (force_format)
   {
-    printf("FORCING FORMAT\n");
-    fmt.fmt.pix.width = HRES;
-    fmt.fmt.pix.height = VRES;
+    printf("Configuring custom device format.\n");
 
-    // Specify the Pixel Coding Formate here
+    // Frame resolution
+    video_format.fmt.pix.width = HRES;
+    video_format.fmt.pix.height = VRES;
 
-    // This one works for Logitech C200
-    fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;
+    // Pixel encoding format
+    video_format.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;
 
-    // fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_UYVY;
-    // fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_VYUY;
+    // Interlacing formatting
+    video_format.fmt.pix.field = V4L2_FIELD_NONE;
 
-    // Would be nice if camera supported
-    // fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_GREY;
-    // fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_RGB24;
-
-    // fmt.fmt.pix.field       = V4L2_FIELD_INTERLACED;
-    fmt.fmt.pix.field = V4L2_FIELD_NONE;
-
-    if (-1 == xioctl(fd, VIDIOC_S_FMT, &fmt))
-      errno_exit("VIDIOC_S_FMT");
-
-    /* Note VIDIOC_S_FMT may change width and height. */
+    if (-1 == signal_safe_ioctl(device_file_descriptor, VIDIOC_S_FMT, &video_format))
+      print_error_number_and_exit("VIDIOC_S_FMT");
   }
   else
   {
-    printf("ASSUMING FORMAT\n");
-    /* Preserve original settings as set by v4l2-ctl for example */
-    if (-1 == xioctl(fd, VIDIOC_G_FMT, &fmt))
-      errno_exit("VIDIOC_G_FMT");
+    printf("Using default device format.\n");
+    if (-1 == signal_safe_ioctl(device_file_descriptor, VIDIOC_G_FMT, &video_format))
+      print_error_number_and_exit("VIDIOC_G_FMT");
   }
 
-  /* Buggy driver paranoia. */
-  min = fmt.fmt.pix.width * 2;
-  if (fmt.fmt.pix.bytesperline < min)
-    fmt.fmt.pix.bytesperline = min;
-  min = fmt.fmt.pix.bytesperline * fmt.fmt.pix.height;
-  if (fmt.fmt.pix.sizeimage < min)
-    fmt.fmt.pix.sizeimage = min;
-
-  switch (io)
-  {
-  case IO_METHOD_READ:
-    init_read(fmt.fmt.pix.sizeimage);
-    break;
-
-  case IO_METHOD_MMAP:
-    init_mmap();
-    break;
-
-  case IO_METHOD_USERPTR:
-    init_userp(fmt.fmt.pix.sizeimage);
-    break;
-  }
+  // Buggy driver paranoia. Prevents bad byte alignment.
+  unsigned int min = video_format.fmt.pix.width * 2;
+  if (video_format.fmt.pix.bytesperline < min)
+    video_format.fmt.pix.bytesperline = min;
+  min = video_format.fmt.pix.bytesperline * video_format.fmt.pix.height;
+  if (video_format.fmt.pix.sizeimage < min)
+    video_format.fmt.pix.sizeimage = min;
 }
 
-static void close_device(void)
+/**
+ * @brief Close the video device file.
+ */
+static void close_device()
 {
-  if (-1 == close(fd))
-    errno_exit("close");
+  if (-1 == close(device_file_descriptor))
+    print_error_number_and_exit("close");
 
-  fd = -1;
+  device_file_descriptor = -1;
 }
 
-static void open_device(void)
+/**
+ * @brief Validate the video device.
+ */
+static void validate_device_name()
 {
   struct stat st;
 
-  if (-1 == stat(dev_name, &st))
-  {
-    fprintf(stderr, "Cannot identify '%s': %d, %s\n",
-            dev_name, errno, strerror(errno));
-    exit(EXIT_FAILURE);
-  }
+  // Validate device is found
+  if (-1 == stat(device_name, &st))
+    print_error_and_exit("Cannot identify '%s': %d, %s\n", device_name, errno, strerror(errno));
 
+  // Validate device is correct type
   if (!S_ISCHR(st.st_mode))
-  {
-    fprintf(stderr, "%s is no device\n", dev_name);
-    exit(EXIT_FAILURE);
-  }
-
-  fd = open(dev_name, O_RDWR /* required */ | O_NONBLOCK, 0);
-
-  if (-1 == fd)
-  {
-    fprintf(stderr, "Cannot open '%s': %d, %s\n",
-            dev_name, errno, strerror(errno));
-    exit(EXIT_FAILURE);
-  }
+    print_error_and_exit("%s is no device\n", device_name);
 }
 
+/**
+ * @brief Open the video device file.
+ */
+static void open_device()
+{
+  device_file_descriptor = open(device_name, O_RDWR | O_NONBLOCK, 0);
+  if (-1 == device_file_descriptor)
+    print_error_and_exit("Cannot open '%s': %d, %s\n", device_name, errno, strerror(errno));
+}
+
+/**
+ * @brief Print this file's usage.
+ */
 static void usage(FILE *fp, int argc, char **argv)
 {
   fprintf(fp,
@@ -952,14 +646,11 @@ static void usage(FILE *fp, int argc, char **argv)
           "Options:\n"
           "-d | --device name   Video device name [%s]\n"
           "-h | --help          Print this message\n"
-          "-m | --mmap          Use memory mapped buffers [default]\n"
-          "-r | --read          Use read() calls\n"
-          "-u | --userp         Use application allocated buffers\n"
           "-o | --output        Outputs stream to stdout\n"
           "-f | --format        Force format to 640x480 GREY\n"
           "-c | --count         Number of frames to grab [%i]\n"
           "",
-          argv[0], dev_name, frame_count);
+          argv[0], device_name, frame_count);
 }
 
 static const char short_options[] = "d:hmruofc:";
@@ -968,9 +659,6 @@ static const struct option
     long_options[] = {
         {"device", required_argument, NULL, 'd'},
         {"help", no_argument, NULL, 'h'},
-        {"mmap", no_argument, NULL, 'm'},
-        {"read", no_argument, NULL, 'r'},
-        {"userp", no_argument, NULL, 'u'},
         {"output", no_argument, NULL, 'o'},
         {"format", no_argument, NULL, 'f'},
         {"count", required_argument, NULL, 'c'},
@@ -979,9 +667,9 @@ static const struct option
 int main(int argc, char **argv)
 {
   if (argc > 1)
-    dev_name = argv[1];
+    device_name = argv[1];
   else
-    dev_name = "/dev/video0";
+    device_name = "/dev/video0";
 
   for (;;)
   {
@@ -1000,24 +688,12 @@ int main(int argc, char **argv)
       break;
 
     case 'd':
-      dev_name = optarg;
+      device_name = optarg;
       break;
 
     case 'h':
       usage(stdout, argc, argv);
       exit(EXIT_SUCCESS);
-
-    case 'm':
-      io = IO_METHOD_MMAP;
-      break;
-
-    case 'r':
-      io = IO_METHOD_READ;
-      break;
-
-    case 'u':
-      io = IO_METHOD_USERPTR;
-      break;
 
     case 'o':
       out_buf++;
@@ -1031,7 +707,7 @@ int main(int argc, char **argv)
       errno = 0;
       frame_count = strtol(optarg, NULL, 0);
       if (errno)
-        errno_exit(optarg);
+        print_error_number_and_exit(optarg);
       break;
 
     default:
@@ -1040,22 +716,23 @@ int main(int argc, char **argv)
     }
   }
 
-  // initialization of V4L2
+  validate_device_name();
   open_device();
-  init_device();
+  validate_device_capabilies();
+  configure_device_format();
+  initialize_mmap();
 
-  start_capturing();
+  start_streaming();
+  capture_frames();
+  stop_streaming();
 
-  // service loop frame read
-  mainloop();
+  printf("Total capture time=%lf, for %d frames, %lf FPS\n", get_elapsed_time_in_seconds(&time_start, &time_stop), CAPTURE_FRAMES + 1, ((double)CAPTURE_FRAMES / get_elapsed_time_in_seconds(&time_start, &time_stop)));
 
-  // shutdown of frame acquisition service
-  stop_capturing();
-
-  printf("Total capture time=%lf, for %d frames, %lf FPS\n", (fstop - fstart), CAPTURE_FRAMES + 1, ((double)CAPTURE_FRAMES / (fstop - fstart)));
-
-  uninit_device();
+  uninitialize_mmap();
   close_device();
+
+  // TODO NICK: Why is this here?
   fprintf(stderr, "\n");
+
   return 0;
 }
