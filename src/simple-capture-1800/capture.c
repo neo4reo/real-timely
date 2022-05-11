@@ -221,6 +221,9 @@ int frames_processed = -8;
 
 unsigned char bigbuffer[(1280 * 960)];
 
+/**
+ * @brief TODO NICK: doc
+ */
 static void process_image(const void *p, int size)
 {
   int i, newi;
@@ -304,42 +307,38 @@ static void process_image(const void *p, int size)
 #endif
 }
 
-static int read_frame(void)
+/**
+ * @brief Capture and process a frame from the video stream.
+ */
+static int capture_next_frame()
 {
-  struct v4l2_buffer buf;
+  // Dequeue a frame buffer
+  struct v4l2_buffer v4l2_buffer_description;
+  CLEAR(v4l2_buffer_description);
+  v4l2_buffer_description.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+  v4l2_buffer_description.memory = V4L2_MEMORY_MMAP;
+  int result = signal_safe_ioctl(device_file_descriptor, VIDIOC_DQBUF, &v4l2_buffer_description);
 
-  CLEAR(buf);
-
-  buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-  buf.memory = V4L2_MEMORY_MMAP;
-
-  if (-1 == signal_safe_ioctl(device_file_descriptor, VIDIOC_DQBUF, &buf))
+  if (result == -1)
   {
-    switch (errno)
-    {
-    case EAGAIN:
+    if (errno == EAGAIN)
       return 0;
-
-    case EIO:
-      /* Could ignore EIO, but drivers should only set for serious errors, although some set for
-         non-fatal errors too.
-       */
+    if (errno == EIO)
+      // Could ignore EIO, but drivers should only set for serious errors,
+      //  although some set for non-fatal errors too.
       return 0;
-
-    default:
-      printf("mmap failure\n");
-      print_error_number_and_exit("VIDIOC_DQBUF");
-    }
+    print_error_number_and_exit("VIDIOC_DQBUF");
   }
 
-  assert(buf.index < number_of_device_buffers);
+  assert(v4l2_buffer_description.index < number_of_device_buffers);
 
-  process_image(device_buffer_infos[buf.index].start, buf.bytesused);
+  // Process the frame
+  process_image(device_buffer_infos[v4l2_buffer_description.index].start, v4l2_buffer_description.bytesused);
 
-  if (-1 == signal_safe_ioctl(device_file_descriptor, VIDIOC_QBUF, &buf))
+  // Re-enqueue the frame buffer
+  if (-1 == signal_safe_ioctl(device_file_descriptor, VIDIOC_QBUF, &v4l2_buffer_description))
     print_error_number_and_exit("VIDIOC_QBUF");
 
-  // printf("R");
   return 1;
 }
 
@@ -380,7 +379,7 @@ static void capture_frames(void)
     if (0 == number_of_set_descriptors)
       print_error_and_exit("`select()` timed out\n");
 
-    if (read_frame())
+    if (capture_next_frame())
     {
       if (nanosleep(&frame_capture_delay, &nanosleep_time_remaining) != 0)
         perror("nanosleep()");
