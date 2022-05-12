@@ -42,19 +42,14 @@
 #define VRES_STR "480"
 
 #define DEVICE_BUFFERS_TO_REQUEST (6)
-#define START_UP_FRAMES (8)
-#define LAST_FRAMES (1)
-#define CAPTURE_FRAMES (1800 + LAST_FRAMES)
-#define FRAMES_TO_ACQUIRE (CAPTURE_FRAMES + START_UP_FRAMES + LAST_FRAMES)
+#define FRAMES_TO_DISCARD_ON_WARMUP (8)
+#define FRAMES_TO_ACQUIRE (10)
 #define FRAMES_PER_SECOND (30)
-
-//#define COLOR_CONVERT_RGB
-#define DUMP_FRAMES
 
 // Format is used by a number of functions, so made as a file global
 static struct v4l2_format video_format;
 
-struct device_buffer_info
+struct mmap_buffer_descriptor
 {
   void *start;
   size_t length;
@@ -62,12 +57,14 @@ struct device_buffer_info
 
 static char *device_name;
 static int device_file_descriptor = -1;
-struct device_buffer_info *device_buffer_infos;
+struct mmap_buffer_descriptor *mmap_buffer_descriptors;
 static unsigned int number_of_device_buffers;
 static int out_buf;
 static int force_format = 1;
 
-static int frame_count = (FRAMES_TO_ACQUIRE);
+static int frames_to_acquire = (FRAMES_TO_ACQUIRE);
+int frame_number = -FRAMES_TO_DISCARD_ON_WARMUP;
+unsigned char writeback_buffer[(1280 * 960)];
 
 static struct timespec time_now, time_start, time_stop;
 
@@ -85,226 +82,89 @@ static int signal_safe_ioctl(int descriptor, int request, void *arg)
   return result;
 }
 
-char ppm_header[] = "P6\n#9999999999 sec 9999999999 msec \n" HRES_STR " " VRES_STR "\n255\n";
-char ppm_dumpname[] = "frames/test0000.ppm";
-
-static void dump_ppm(const void *p, int size, unsigned int tag, struct timespec *time)
-{
-  int written, total, dumpfd;
-
-  snprintf(&ppm_dumpname[11], 9, "%04d", tag);
-  strncat(&ppm_dumpname[15], ".ppm", 5);
-  dumpfd = open(ppm_dumpname, O_WRONLY | O_NONBLOCK | O_CREAT, 00666);
-
-  snprintf(&ppm_header[4], 11, "%010d", (int)time->tv_sec);
-  strncat(&ppm_header[14], " sec ", 5);
-  snprintf(&ppm_header[19], 11, "%010d", (int)((time->tv_nsec) / 1000000));
-  strncat(&ppm_header[29], " msec \n" HRES_STR " " VRES_STR "\n255\n", 19);
-
-  // subtract 1 from sizeof header because it includes the null terminator for the string
-  written = write(dumpfd, ppm_header, sizeof(ppm_header) - 1);
-
-  total = 0;
-
-  do
-  {
-    written = write(dumpfd, p, size);
-    total += written;
-  } while (total < size);
-
-  clock_gettime(CLOCK_MONOTONIC, &time_now);
-  printf("Frame written to flash at %lf, %d, bytes\n", get_elapsed_time_in_seconds(&time_start, &time_now), total);
-
-  close(dumpfd);
-}
-
-char pgm_header[] = "P5\n#9999999999 sec 9999999999 msec \n" HRES_STR " " VRES_STR "\n255\n";
-char pgm_dumpname[] = "frames/test0000.pgm";
-
-static void dump_pgm(const void *p, int size, unsigned int tag, struct timespec *time)
-{
-  int written, total, dumpfd;
-
-  snprintf(&pgm_dumpname[11], 9, "%04d", tag);
-  strncat(&pgm_dumpname[15], ".pgm", 5);
-  dumpfd = open(pgm_dumpname, O_WRONLY | O_NONBLOCK | O_CREAT, 00666);
-
-  snprintf(&pgm_header[4], 11, "%010d", (int)time->tv_sec);
-  strncat(&pgm_header[14], " sec ", 5);
-  snprintf(&pgm_header[19], 11, "%010d", (int)((time->tv_nsec) / 1000000));
-  strncat(&pgm_header[29], " msec \n" HRES_STR " " VRES_STR "\n255\n", 19);
-
-  // subtract 1 from sizeof header because it includes the null terminator for the string
-  written = write(dumpfd, pgm_header, sizeof(pgm_header) - 1);
-
-  total = 0;
-
-  do
-  {
-    written = write(dumpfd, p, size);
-    total += written;
-  } while (total < size);
-
-  clock_gettime(CLOCK_MONOTONIC, &time_now);
-  printf("Frame written to flash at %lf, %d, bytes\n", get_elapsed_time_in_seconds(&time_start, &time_now), total);
-
-  close(dumpfd);
-}
-
-void yuv2rgb_float(float y, float u, float v,
-                   unsigned char *r, unsigned char *g, unsigned char *b)
-{
-  float r_temp, g_temp, b_temp;
-
-  // R = 1.164(Y-16) + 1.1596(V-128)
-  r_temp = 1.164 * (y - 16.0) + 1.1596 * (v - 128.0);
-  *r = r_temp > 255.0 ? 255 : (r_temp < 0.0 ? 0 : (unsigned char)r_temp);
-
-  // G = 1.164(Y-16) - 0.813*(V-128) - 0.391*(U-128)
-  g_temp = 1.164 * (y - 16.0) - 0.813 * (v - 128.0) - 0.391 * (u - 128.0);
-  *g = g_temp > 255.0 ? 255 : (g_temp < 0.0 ? 0 : (unsigned char)g_temp);
-
-  // B = 1.164*(Y-16) + 2.018*(U-128)
-  b_temp = 1.164 * (y - 16.0) + 2.018 * (u - 128.0);
-  *b = b_temp > 255.0 ? 255 : (b_temp < 0.0 ? 0 : (unsigned char)b_temp);
-}
-
-// This is probably the most acceptable conversion from camera YUYV to RGB
-//
-// Wikipedia has a good discussion on the details of various conversions and cites good references:
-// http://en.wikipedia.org/wiki/YUV
-//
-// Also http://www.fourcc.org/yuv.php
-//
-// What's not clear without knowing more about the camera in question is how often U & V are sampled compared
-// to Y.
-//
-// E.g. YUV444, which is equivalent to RGB, where both require 3 bytes for each pixel
-//      YUV422, which we assume here, where there are 2 bytes for each pixel, with two Y samples for one U & V,
-//              or as the name implies, 4Y and 2 UV pairs
-//      YUV420, where for every 4 Ys, there is a single UV pair, 1.5 bytes for each pixel or 36 bytes for 24 pixels
-
-void yuv2rgb(int y, int u, int v, unsigned char *r, unsigned char *g, unsigned char *b)
-{
-  int r1, g1, b1;
-
-  // replaces floating point coefficients
-  int c = y - 16, d = u - 128, e = v - 128;
-
-  // Conversion that avoids floating point
-  r1 = (298 * c + 409 * e + 128) >> 8;
-  g1 = (298 * c - 100 * d - 208 * e + 128) >> 8;
-  b1 = (298 * c + 516 * d + 128) >> 8;
-
-  // Computed values may need clipping.
-  if (r1 > 255)
-    r1 = 255;
-  if (g1 > 255)
-    g1 = 255;
-  if (b1 > 255)
-    b1 = 255;
-
-  if (r1 < 0)
-    r1 = 0;
-  if (g1 < 0)
-    g1 = 0;
-  if (b1 < 0)
-    b1 = 0;
-
-  *r = r1;
-  *g = g1;
-  *b = b1;
-}
-
-// always ignore first 8 frames
-int frames_processed = -8;
-
-unsigned char bigbuffer[(1280 * 960)];
+char pgm_file_header[] = "P5\n#9999999999 sec 9999999999 msec \n" HRES_STR " " VRES_STR "\n255\n";
+char pgm_filename[] = "frames/test0000.pgm";
 
 /**
- * @brief TODO NICK: doc
+ * @brief Write out a PGM file from the image buffer to disk.
  */
-static void process_image(const void *p, int size)
+static void write_pgm_image_to_disk(const void *buffer_start,
+                                    int buffer_length,
+                                    unsigned int frame_number,
+                                    struct timespec *timestamp_time)
 {
-  int i, newi;
+  // Create the new image file and open it for writing
+  snprintf(&pgm_filename[11], 9, "%04d", frame_number);
+  strncat(&pgm_filename[15], ".pgm", 5);
+  int pgm_file_descriptor = open(pgm_filename, O_WRONLY | O_NONBLOCK | O_CREAT, 00666);
+  if (-1 == pgm_file_descriptor)
+    print_error_number_and_exit("open()");
+
+  // Write the file header
+  snprintf(&pgm_file_header[4], 11, "%010d", (int)(timestamp_time->tv_sec));
+  strncat(&pgm_file_header[14], " sec ", 5);
+  snprintf(&pgm_file_header[19], 11, "%010d", (int)((timestamp_time->tv_nsec) / NANOSECONDS_PER_MILLSECOND));
+  strncat(&pgm_file_header[29], " msec \n" HRES_STR " " VRES_STR "\n255\n", 19);
+  // Subtract 1 from sizeof header because it includes the null terminator for the string
+  int bytes_written = write(pgm_file_descriptor, pgm_file_header, sizeof(pgm_file_header) - 1);
+  if (-1 == bytes_written)
+    print_error_number_and_exit("write()");
+
+  // Write the image raster
+  int total_image_bytes_written = 0;
+  do
+  {
+    bytes_written = write(pgm_file_descriptor, buffer_start, buffer_length);
+    if (-1 == bytes_written)
+      print_error_number_and_exit("write()");
+    total_image_bytes_written += bytes_written;
+  } while (total_image_bytes_written < buffer_length);
+
+  // Print time
+  get_current_monotonic_raw_time(&time_now);
+  printf("Frame written to flash at %lf, %d, bytes\n", get_elapsed_time_in_seconds(&time_start, &time_now), total_image_bytes_written);
+
+  // Close the file
+  close(pgm_file_descriptor);
+}
+
+/**
+ * @brief Convert image to different format and save to disk.
+ */
+static void process_image(const void *buffer_start, int buffer_length)
+{
+  // Record timestamp of this frame.
   struct timespec frame_time;
-  unsigned char *pptr = (unsigned char *)p;
+  get_current_realtime_time(&frame_time);
 
-  // record when process was called
-  clock_gettime(CLOCK_REALTIME, &frame_time);
+  printf("frame %d: ", frame_number);
 
-  frames_processed++;
-  printf("frame %d: ", frames_processed);
+  if (frame_number == 0)
+    get_current_monotonic_raw_time(&time_start);
 
-  if (frames_processed == 0)
-    clock_gettime(CLOCK_MONOTONIC, &time_start);
+  // Dump frames
+  if (video_format.fmt.pix.pixelformat != V4L2_PIX_FMT_YUYV)
+    print_error_and_exit("Camera is not using YUYV format\n");
 
-#ifdef DUMP_FRAMES
+  // Skip processing warmup frames.
+  if (frame_number < 0)
+    return;
 
-  // This just dumps the frame to a file now, but you could replace with whatever image
-  // processing you wish.
-  //
-
-  if (video_format.fmt.pix.pixelformat == V4L2_PIX_FMT_GREY)
+  // Prepare a PGM-format graymap image sourced form the Y pixel values of the
+  // raw YUYV frames.
+  unsigned char *buffer_bytes = (unsigned char *)buffer_start;
+  for (int input_byte_index = 0, output_byte_index = 0;
+       input_byte_index < buffer_length;
+       input_byte_index = input_byte_index + 4, output_byte_index = output_byte_index + 2)
   {
-    printf("Dump graymap as-is size %d\n", size);
-    dump_pgm(p, size, frames_processed, &frame_time);
-  }
-
-  else if (video_format.fmt.pix.pixelformat == V4L2_PIX_FMT_YUYV)
-  {
-
-#if defined(COLOR_CONVERT_RGB)
-
     // Pixels are YU and YV alternating, so YUYV which is 4 bytes
-    // We want RGB, so RGBRGB which is 6 bytes
-    //
-    for (i = 0, newi = 0; i < size; i = i + 4, newi = newi + 6)
-    {
-      y_temp = (int)pptr[i];
-      u_temp = (int)pptr[i + 1];
-      y2_temp = (int)pptr[i + 2];
-      v_temp = (int)pptr[i + 3];
-      yuv2rgb(y_temp, u_temp, v_temp, &bigbuffer[newi], &bigbuffer[newi + 1], &bigbuffer[newi + 2]);
-      yuv2rgb(y2_temp, u_temp, v_temp, &bigbuffer[newi + 3], &bigbuffer[newi + 4], &bigbuffer[newi + 5]);
-    }
-
-    if (framecnt > -1)
-    {
-      dump_ppm(bigbuffer, ((size * 6) / 4), framecnt, &frame_time);
-      printf("Dump YUYV converted to RGB size %d\n", size);
-    }
-#else
-
-    // Pixels are YU and YV alternating, so YUYV which is 4 bytes
-    // We want Y, so YY which is 2 bytes
-    //
-    for (i = 0, newi = 0; i < size; i = i + 4, newi = newi + 2)
-    {
-      // Y1=first byte and Y2=third byte
-      bigbuffer[newi] = pptr[i];
-      bigbuffer[newi + 1] = pptr[i + 2];
-    }
-
-    if (frames_processed > -1)
-    {
-      dump_pgm(bigbuffer, (size / 2), frames_processed, &frame_time);
-      printf("Dump YUYV converted to YY size %d\n", size);
-    }
-#endif
+    // We want YY which is 2 bytes
+    // Y1 is first byte, Y2 is third byte
+    writeback_buffer[output_byte_index] = buffer_bytes[input_byte_index];
+    writeback_buffer[output_byte_index + 1] = buffer_bytes[input_byte_index + 2];
   }
 
-  else if (video_format.fmt.pix.pixelformat == V4L2_PIX_FMT_RGB24)
-  {
-    printf("Dump RGB as-is size %d\n", size);
-    dump_ppm(p, size, frames_processed, &frame_time);
-  }
-  else
-  {
-    printf("ERROR - unknown dump format\n");
-  }
-
-#endif
+  write_pgm_image_to_disk(writeback_buffer, (buffer_length / 2), frame_number, &frame_time);
 }
 
 /**
@@ -313,30 +173,31 @@ static void process_image(const void *p, int size)
 static int capture_next_frame()
 {
   // Dequeue a frame buffer
-  struct v4l2_buffer v4l2_buffer_description;
-  CLEAR(v4l2_buffer_description);
-  v4l2_buffer_description.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-  v4l2_buffer_description.memory = V4L2_MEMORY_MMAP;
-  int result = signal_safe_ioctl(device_file_descriptor, VIDIOC_DQBUF, &v4l2_buffer_description);
+  struct v4l2_buffer v4l2_buffer_descriptor;
+  CLEAR(v4l2_buffer_descriptor);
+  v4l2_buffer_descriptor.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+  v4l2_buffer_descriptor.memory = V4L2_MEMORY_MMAP;
+  int result = signal_safe_ioctl(device_file_descriptor, VIDIOC_DQBUF, &v4l2_buffer_descriptor);
 
+  // Make sure dequeue went okay
   if (result == -1)
   {
     if (errno == EAGAIN)
       return 0;
     if (errno == EIO)
       // Could ignore EIO, but drivers should only set for serious errors,
-      //  although some set for non-fatal errors too.
+      // although some set for non-fatal errors too.
       return 0;
     print_error_number_and_exit("VIDIOC_DQBUF");
   }
-
-  assert(v4l2_buffer_description.index < number_of_device_buffers);
+  assert(v4l2_buffer_descriptor.index < number_of_device_buffers);
 
   // Process the frame
-  process_image(device_buffer_infos[v4l2_buffer_description.index].start, v4l2_buffer_description.bytesused);
+  process_image(mmap_buffer_descriptors[v4l2_buffer_descriptor.index].start,
+                v4l2_buffer_descriptor.bytesused);
 
   // Re-enqueue the frame buffer
-  if (-1 == signal_safe_ioctl(device_file_descriptor, VIDIOC_QBUF, &v4l2_buffer_description))
+  if (-1 == signal_safe_ioctl(device_file_descriptor, VIDIOC_QBUF, &v4l2_buffer_descriptor))
     print_error_number_and_exit("VIDIOC_QBUF");
 
   return 1;
@@ -345,7 +206,7 @@ static int capture_next_frame()
 /**
  * @brief Capture the prescribed number of frames from the stream.
  */
-static void capture_frames(void)
+static void capture_frames()
 {
   // Set capture rate
   printf("Capturing frames at %u frames per second\n", FRAMES_PER_SECOND);
@@ -355,8 +216,7 @@ static void capture_frames(void)
 
   // Capture frames
   struct timespec nanosleep_time_remaining;
-  unsigned int frames_remaining = frame_count;
-  while (frames_remaining > 0)
+  while (frame_number < frames_to_acquire)
   {
     // Prepare to select using the device file descriptor.
     fd_set file_descriptor_set;
@@ -381,26 +241,23 @@ static void capture_frames(void)
 
     if (capture_next_frame())
     {
-      if (nanosleep(&frame_capture_delay, &nanosleep_time_remaining) != 0)
-        perror("nanosleep()");
-      else
-      {
-        if (frames_processed > 1)
-        {
-          clock_gettime(CLOCK_MONOTONIC, &time_now);
-          printf(" read at %lf, @ %lf FPS\n", get_elapsed_time_in_seconds(&time_start, &time_now), (double)(frames_processed + 1) / get_elapsed_time_in_seconds(&time_start, &time_now));
-        }
-        else
-        {
-          printf("at %lf\n", get_time_in_seconds(&time_now));
-        }
-      }
+      if (0 != nanosleep(&frame_capture_delay, &nanosleep_time_remaining))
+        print_error_number_and_exit("nanosleep()");
 
-      frames_remaining--;
+      if (frame_number >= 0)
+      {
+        get_current_monotonic_raw_time(&time_now);
+        double elapsed_time = get_elapsed_time_in_seconds(&time_start, &time_now);
+        printf(" completed at %lf, @ %lf FPS\n", elapsed_time, (frame_number + 1) / elapsed_time);
+      }
+      else
+        printf(" discarded\n");
+
+      frame_number++;
     }
   }
 
-  clock_gettime(CLOCK_MONOTONIC, &time_stop);
+  get_current_monotonic_raw_time(&time_stop);
 }
 
 /**
@@ -421,14 +278,14 @@ static void start_streaming()
   // Enqueue all of the device buffers
   for (unsigned int index = 0; index < number_of_device_buffers; ++index)
   {
-    struct v4l2_buffer v4l2_buffer_description;
-    CLEAR(v4l2_buffer_description);
-    v4l2_buffer_description.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    v4l2_buffer_description.memory = V4L2_MEMORY_MMAP;
-    v4l2_buffer_description.index = index;
+    struct v4l2_buffer v4l2_buffer_descriptor;
+    CLEAR(v4l2_buffer_descriptor);
+    v4l2_buffer_descriptor.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    v4l2_buffer_descriptor.memory = V4L2_MEMORY_MMAP;
+    v4l2_buffer_descriptor.index = index;
 
     printf("Enqueueing device buffer %d\n", index);
-    if (-1 == signal_safe_ioctl(device_file_descriptor, VIDIOC_QBUF, &v4l2_buffer_description))
+    if (-1 == signal_safe_ioctl(device_file_descriptor, VIDIOC_QBUF, &v4l2_buffer_descriptor))
       print_error_number_and_exit("VIDIOC_QBUF");
   }
 
@@ -443,10 +300,10 @@ static void start_streaming()
 static void uninitialize_mmap(void)
 {
   for (unsigned int index = 0; index < number_of_device_buffers; ++index)
-    if (-1 == munmap(device_buffer_infos[index].start, device_buffer_infos[index].length))
+    if (-1 == munmap(mmap_buffer_descriptors[index].start, mmap_buffer_descriptors[index].length))
       print_error_number_and_exit("munmap");
 
-  free(device_buffer_infos);
+  free(mmap_buffer_descriptors);
 }
 
 /**
@@ -477,33 +334,33 @@ static void initialize_mmap(void)
     print_error_and_exit("Insufficient buffer memory on %s\n", device_name);
 
   // Allocate memory for buffer information
-  device_buffer_infos = calloc(number_of_device_buffers, sizeof(*device_buffer_infos));
-  if (!device_buffer_infos)
+  mmap_buffer_descriptors = calloc(number_of_device_buffers, sizeof(*mmap_buffer_descriptors));
+  if (!mmap_buffer_descriptors)
     print_error_and_exit("Out of memory\n");
 
   // Initialize each allocated device buffer.
   // TODO NICK: Original code seemed to leave `number_of_device_buffers` at one too many. Check if this is an issue.
   for (unsigned int device_buffer_index = 0; device_buffer_index < number_of_device_buffers; ++device_buffer_index)
   {
-    struct v4l2_buffer v4l2_buffer_description;
-    CLEAR(v4l2_buffer_description);
-    v4l2_buffer_description.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    v4l2_buffer_description.memory = V4L2_MEMORY_MMAP;
-    v4l2_buffer_description.index = device_buffer_index;
+    struct v4l2_buffer v4l2_buffer_descriptor;
+    CLEAR(v4l2_buffer_descriptor);
+    v4l2_buffer_descriptor.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    v4l2_buffer_descriptor.memory = V4L2_MEMORY_MMAP;
+    v4l2_buffer_descriptor.index = device_buffer_index;
 
-    if (-1 == signal_safe_ioctl(device_file_descriptor, VIDIOC_QUERYBUF, &v4l2_buffer_description))
+    if (-1 == signal_safe_ioctl(device_file_descriptor, VIDIOC_QUERYBUF, &v4l2_buffer_descriptor))
       print_error_number_and_exit("VIDIOC_QUERYBUF");
 
-    device_buffer_infos[device_buffer_index].length = v4l2_buffer_description.length;
-    device_buffer_infos[device_buffer_index].start =
+    mmap_buffer_descriptors[device_buffer_index].length = v4l2_buffer_descriptor.length;
+    mmap_buffer_descriptors[device_buffer_index].start =
         mmap(NULL,
-             v4l2_buffer_description.length,
+             v4l2_buffer_descriptor.length,
              PROT_READ | PROT_WRITE,
              MAP_SHARED,
              device_file_descriptor,
-             v4l2_buffer_description.m.offset);
+             v4l2_buffer_descriptor.m.offset);
 
-    if (MAP_FAILED == device_buffer_infos[device_buffer_index].start)
+    if (MAP_FAILED == mmap_buffer_descriptors[device_buffer_index].start)
       print_error_number_and_exit("mmap");
   }
 }
@@ -649,7 +506,7 @@ static void usage(FILE *fp, int argc, char **argv)
           "-f | --format        Force format to 640x480 GREY\n"
           "-c | --count         Number of frames to grab [%i]\n"
           "",
-          argv[0], device_name, frame_count);
+          argv[0], device_name, frames_to_acquire);
 }
 
 static const char short_options[] = "d:hmruofc:";
@@ -704,7 +561,7 @@ int main(int argc, char **argv)
 
     case 'c':
       errno = 0;
-      frame_count = strtol(optarg, NULL, 0);
+      frames_to_acquire = strtol(optarg, NULL, 0);
       if (errno)
         print_error_number_and_exit(optarg);
       break;
@@ -720,18 +577,14 @@ int main(int argc, char **argv)
   validate_device_capabilies();
   configure_device_format();
   initialize_mmap();
-
   start_streaming();
+
   capture_frames();
+  printf("Total capture time=%lf, for %d frames, %lf FPS\n", get_elapsed_time_in_seconds(&time_start, &time_stop), FRAMES_TO_ACQUIRE, ((double)FRAMES_TO_ACQUIRE / get_elapsed_time_in_seconds(&time_start, &time_stop)));
+
   stop_streaming();
-
-  printf("Total capture time=%lf, for %d frames, %lf FPS\n", get_elapsed_time_in_seconds(&time_start, &time_stop), CAPTURE_FRAMES + 1, ((double)CAPTURE_FRAMES / get_elapsed_time_in_seconds(&time_start, &time_stop)));
-
   uninitialize_mmap();
   close_device();
-
-  // TODO NICK: Why is this here?
-  fprintf(stderr, "\n");
 
   return 0;
 }

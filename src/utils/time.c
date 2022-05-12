@@ -6,9 +6,19 @@
 /**
  * @brief Get the current monotonic clock time from the computer.
  */
-void get_current_time(struct timespec *result)
+void get_current_monotonic_raw_time(struct timespec *result)
 {
   int return_code = clock_gettime(CLOCK_MONOTONIC_RAW, result);
+  if (return_code)
+    print_error_number_and_exit("clock_gettime()");
+}
+
+/**
+ * @brief Get the current monotonic clock time from the computer.
+ */
+void get_current_realtime_time(struct timespec *result)
+{
+  int return_code = clock_gettime(CLOCK_REALTIME, result);
   if (return_code)
     print_error_number_and_exit("clock_gettime()");
 }

@@ -4,8 +4,10 @@
 #include <time.h>
 
 #define NANOSECONDS_PER_SECOND (1000000000)
+#define NANOSECONDS_PER_MILLSECOND (1000000)
 
-void get_current_time(struct timespec *result);
+void get_current_monotonic_raw_time(struct timespec *result);
+void get_current_realtime_time(struct timespec *result);
 double get_time_in_seconds(struct timespec *time);
 void normalize_timespec(struct timespec *time);
 void get_elapsed_time(struct timespec *start_time, struct timespec *end_time, struct timespec *result);
