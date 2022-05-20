@@ -28,3 +28,15 @@ void print_with_errno_and_exit(const char *format, ...)
   va_start(arguments, format);
   err(EXIT_FAILURE, format, arguments);
 }
+
+/**
+ * @brief If the first argument resolves to a non-zero value, exits with the
+ * error message provided.
+ */
+void attempt(int result, const char *format, ...)
+{
+  va_list arguments;
+  va_start(arguments, format);
+  if (result != 0)
+    print_with_errno_and_exit(format, arguments);
+}
