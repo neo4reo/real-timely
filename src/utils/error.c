@@ -15,8 +15,13 @@ void print_error_and_exit(const char *format, ...)
 {
   va_list arguments;
   va_start(arguments, format);
-  fprintf(stderr, format, arguments);
+  vfprintf(stderr, format, arguments);
   exit(EXIT_FAILURE);
+}
+
+void vprint_with_errno_and_exit(const char *format, va_list arguments)
+{
+  verr(EXIT_FAILURE, format, arguments);
 }
 
 /**
@@ -26,7 +31,8 @@ void print_with_errno_and_exit(const char *format, ...)
 {
   va_list arguments;
   va_start(arguments, format);
-  err(EXIT_FAILURE, format, arguments);
+  vprint_with_errno_and_exit(format, arguments);
+  va_end(arguments);
 }
 
 /**
@@ -38,5 +44,5 @@ void attempt(int result, const char *format, ...)
   va_list arguments;
   va_start(arguments, format);
   if (result != 0)
-    print_with_errno_and_exit(format, arguments);
+    vprint_with_errno_and_exit(format, arguments);
 }
