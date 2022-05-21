@@ -36,13 +36,15 @@ void print_with_errno_and_exit(const char *format, ...)
 }
 
 /**
- * @brief If the first argument resolves to a non-zero value, exits with the
- * error message provided.
+ * @brief If the first argument resolves to -1, exits with the error message
+ * provided. Otherwise returns the result.
  */
-void attempt(int result, const char *format, ...)
+int attempt(int result, const char *format, ...)
 {
   va_list arguments;
   va_start(arguments, format);
-  if (result != 0)
+  if (result == -1)
     vprint_with_errno_and_exit(format, arguments);
+
+  return result;
 }

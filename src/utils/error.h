@@ -3,6 +3,6 @@
 
 void print_error_and_exit(const char *format, ...);
 void print_with_errno_and_exit(const char *format, ...);
-void attempt(int result, const char *format, ...);
+int attempt(int result, const char *format, ...);
 
 #endif
