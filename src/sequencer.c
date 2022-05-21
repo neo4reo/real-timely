@@ -13,14 +13,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "utils/error.h"
+#include "utils/log.h"
 #include "utils/time.h"
 #include "sequencer.h"
 #include "test_functions.h"
 
+#define LOG_PREFIX "[REAL TIMELY]"
+#define NUMBER_OF_SERVICES (2)
+
 #define TRUE (1)
 #define FALSE (0)
-
-#define NUMBER_OF_SERVICES (2)
 
 /**
  * @brief The service schedule.
@@ -33,7 +35,8 @@ Schedule schedule = {
     .services = (Service[NUMBER_OF_SERVICES]){
         {
             .id = 1,
-            .period = 10,
+            .name = "Print Beans",
+            .period = 5,
             .cpu = 3,
             .priority_descending = 1,
             .exit_flag = FALSE,
@@ -41,16 +44,14 @@ Schedule schedule = {
         },
         {
             .id = 2,
-            .period = 5,
+            .name = "Print Cornbread",
+            .period = 10,
             .cpu = 3,
             .priority_descending = 2,
             .exit_flag = FALSE,
             .service_function = (void (*)())print_cornbread,
         }},
 };
-
-// Timing objects
-struct timespec start_time, end_time, current_time;
 
 /**
  * @brief A real-time service thread entry point, for use with
@@ -76,7 +77,9 @@ void *ServiceThread(void *thread_parameters)
     ++request_counter;
 
     // Perform the work.
+    write_log("Service: %i, Service Name: %s, Request: %i, Begin", service->id, service->name, request_counter);
     (service->service_function)();
+    write_log("Service: %i, Service Name: %s, Request: %i, Done", service->id, service->name, request_counter);
   }
 }
 
@@ -113,6 +116,8 @@ void terminate_all_services(Schedule *schedule)
  */
 void Sequencer(int signal_number)
 {
+  write_log("Sequencer: %llu", schedule.iteration_counter);
+
   // Release all the services that are scheduled for this time unit.
   for (int index = 0; index < schedule.number_of_services; ++index)
   {
@@ -239,7 +244,7 @@ void begin_sequencing(Schedule *schedule)
       "timer_create()");
 
   // Start the timer.
-  get_current_monotonic_raw_time(&start_time);
+  start_log(LOG_PREFIX);
   attempt(
       timer_settime(
           schedule->timer,
@@ -287,7 +292,6 @@ void validate_current_thread_is_real_time()
 
 int main()
 {
-  // Make sure the main thread cannot get preempted.
   set_current_thread_to_real_time();
   validate_current_thread_is_real_time();
 

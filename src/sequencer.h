@@ -10,6 +10,7 @@
 typedef struct Service
 {
   unsigned int id;
+  char *name;
   int priority_descending;
   int period;
   int cpu;
