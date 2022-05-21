@@ -11,6 +11,7 @@
 #include "time.h"
 
 struct timespec start_time, current_time;
+struct sched_param schedule_parameters;
 
 /**
  * Erase the syslog file and open a new log stream, and record logging start
@@ -29,8 +30,8 @@ void start_log(const char *log_prefix)
 }
 
 /**
- * @brief Generate a log message, prefixed with the elapsed time and the CPU of
- * the caller, followed by the given formatted message.
+ * @brief Generate a log message, prefixed with the elapsed time and the CPU
+ * and priority of the caller, followed by the given formatted message.
  */
 void write_log(const char *format, ...)
 {
@@ -41,9 +42,14 @@ void write_log(const char *format, ...)
   // Get the CPU.
   int cpu = attempt(sched_getcpu(), "sched_getcpu()");
 
+  // Get the scheduler priority.
+  sched_getparam(0, &schedule_parameters);
+  int max_priority = sched_get_priority_max(sched_getscheduler(0));
+  int priority_descending = max_priority - schedule_parameters.sched_priority;
+
   // Prefix the message.
   static char message[500] = "";
-  sprintf(message, "Elapsed: %6.9lf, CPU: %i, ", elapsed_time, cpu);
+  sprintf(message, "Elapsed: %6.9lf, CPU: %i, Priority: %i, ", elapsed_time, cpu, priority_descending);
   strcat(message, format);
 
   va_list arguments;
