@@ -63,7 +63,7 @@ void *ServiceThread(void *thread_parameters)
   // Cast the thread parameters so the compiler can handle them.
   Service *service = (Service *)thread_parameters;
 
-  unsigned long long request_counter = 0;
+  unsigned int request_counter = 0;
   while (TRUE)
   {
     // Block until requested.
@@ -77,9 +77,9 @@ void *ServiceThread(void *thread_parameters)
     ++request_counter;
 
     // Perform the work.
-    write_log("Service: %i, Service Name: %s, Request: %i, Begin", service->id, service->name, request_counter);
+    write_log("Service: %i, Service Name: %s, Request: %u, Begin", service->id, service->name, request_counter);
     (service->service_function)();
-    write_log("Service: %i, Service Name: %s, Request: %i, Done", service->id, service->name, request_counter);
+    write_log("Service: %i, Service Name: %s, Request: %u, Done", service->id, service->name, request_counter);
   }
 }
 
