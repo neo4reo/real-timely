@@ -31,6 +31,7 @@ Schedule schedule = {
     .frequency = 10,
     .maximum_iterations = 50,
     .iteration_counter = 0,
+    .sequencer_cpu = 1,
     .number_of_services = NUMBER_OF_SERVICES,
     .services = (Service[NUMBER_OF_SERVICES]){
         {
@@ -257,7 +258,7 @@ void begin_sequencing(Schedule *schedule)
 /**
  * @brief Set the calling thread to the highest-priority real-time schedule.
  */
-void set_current_thread_to_real_time()
+void set_current_thread_to_real_time(int cpu)
 {
   struct sched_param schedule_paramaters;
   attempt(
@@ -268,6 +269,14 @@ void set_current_thread_to_real_time()
   attempt(
       sched_setscheduler(0, SCHED_FIFO, &schedule_paramaters),
       "sched_setscheduler()");
+
+  // Apply CPU affinity.
+  cpu_set_t cpu_set;
+  CPU_ZERO(&cpu_set);
+  CPU_SET(cpu, &cpu_set);
+  attempt(
+      sched_setaffinity(0, sizeof(cpu_set), &cpu_set),
+      "sched_setaffinity()");
 }
 
 /**
@@ -292,7 +301,7 @@ void validate_current_thread_is_real_time()
 
 int main()
 {
-  set_current_thread_to_real_time();
+  set_current_thread_to_real_time(schedule.sequencer_cpu);
   validate_current_thread_is_real_time();
 
   start_all_services(&schedule);

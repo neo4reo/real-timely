@@ -32,6 +32,7 @@ typedef struct Schedule
   struct Service *services;
   unsigned long long maximum_iterations;
   unsigned long long iteration_counter;
+  int sequencer_cpu;
   timer_t timer;
   struct itimerspec timer_interval;
 } Schedule;
