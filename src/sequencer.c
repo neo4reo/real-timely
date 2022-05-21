@@ -19,7 +19,7 @@
 #include "test_functions.h"
 
 #define LOG_PREFIX "[REAL TIMELY]"
-#define NUMBER_OF_SERVICES (2)
+#define NUMBER_OF_SERVICES (3)
 
 #define TRUE (1)
 #define FALSE (0)
@@ -28,31 +28,59 @@
  * @brief The service schedule.
  */
 Schedule schedule = {
-    .frequency = 10,
-    .maximum_iterations = 50,
+    .frequency = 60,
+    .maximum_iterations = 120,
     .iteration_counter = 0,
-    .sequencer_cpu = 1,
+    .sequencer_cpu = 0,
     .number_of_services = NUMBER_OF_SERVICES,
     .services = (Service[NUMBER_OF_SERVICES]){
         {
             .id = 1,
             .name = "Print Beans",
-            .period = 5,
+            .period = 30,
             .cpu = 3,
-            .priority_descending = 1,
             .exit_flag = FALSE,
             .service_function = (void (*)())print_beans,
         },
         {
             .id = 2,
             .name = "Print Cornbread",
-            .period = 10,
+            .period = 5,
             .cpu = 3,
-            .priority_descending = 2,
             .exit_flag = FALSE,
             .service_function = (void (*)())print_cornbread,
-        }},
+        },
+        {
+            .id = 3,
+            .name = "Print Pickles",
+            .period = 20,
+            .cpu = 3,
+            .exit_flag = FALSE,
+            .service_function = (void (*)())print_pickles,
+        },
+    },
 };
+
+/**
+ * @brief Compare two services' periods for sorting priority.
+ */
+int compare_service_periods(const void *a, const void *b)
+{
+  const Service *service_a = (Service *)a;
+  const Service *service_b = (Service *)b;
+  return service_a->period - service_b->period;
+}
+
+/**
+ * @brief Sort the services from shortest period to longest, and assign rate-
+ * monotonic priorities accordingly.
+ */
+void assign_service_priorities(Schedule *schedule)
+{
+  qsort(schedule->services, schedule->number_of_services, sizeof(Service), compare_service_periods);
+  for (int index = 0; index < schedule->number_of_services; ++index)
+    schedule->services[index].priority_descending = index + 1;
+}
 
 /**
  * @brief A real-time service thread entry point, for use with
@@ -304,6 +332,7 @@ int main()
   set_current_thread_to_real_time(schedule.sequencer_cpu);
   validate_current_thread_is_real_time();
 
+  assign_service_priorities(&schedule);
   start_all_services(&schedule);
   begin_sequencing(&schedule);
 
