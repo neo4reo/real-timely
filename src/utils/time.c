@@ -9,9 +9,7 @@
  */
 void get_current_monotonic_raw_time(struct timespec *result)
 {
-  int return_code = clock_gettime(CLOCK_MONOTONIC_RAW, result);
-  if (return_code)
-    print_error_number_and_exit("clock_gettime()");
+  attempt(clock_gettime(CLOCK_MONOTONIC_RAW, result), "clock_gettime()");
 }
 
 /**
@@ -19,9 +17,7 @@ void get_current_monotonic_raw_time(struct timespec *result)
  */
 void get_current_realtime_time(struct timespec *result)
 {
-  int return_code = clock_gettime(CLOCK_REALTIME, result);
-  if (return_code)
-    print_error_number_and_exit("clock_gettime()");
+  attempt(clock_gettime(CLOCK_REALTIME, result), "clock_gettime()");
 }
 
 /**
