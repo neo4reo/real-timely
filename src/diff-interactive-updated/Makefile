@@ -1,6 +1,6 @@
 INCLUDE_DIRS =
 LIB_DIRS =
-CC=g++
+CC=clang++
 
 CDEFS=
 CFLAGS= -O0 -g $(INCLUDE_DIRS) $(CDEFS)
@@ -24,7 +24,7 @@ distclean:
 	-rm -f *.o *.d
 
 capture: capture.o
-	$(CC) $(LDFLAGS) $(CFLAGS) ../utils/*.c -o $@ $@.o `pkg-config --libs opencv` $(CPPLIBS)
+	$(CC) $(LDFLAGS) $(CFLAGS) ../utils/error.c ../utils/time.c -o $@ $@.o `pkg-config --libs opencv` $(CPPLIBS)
 
 depend:
 
