@@ -12,11 +12,11 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "services/test_functions.h"
+#include "sequencer.h"
 #include "utils/error.h"
 #include "utils/log.h"
 #include "utils/time.h"
-#include "sequencer.h"
-#include "test_functions.h"
 
 #define LOG_PREFIX "[REAL TIMELY]"
 #define NUMBER_OF_SERVICES (3)
