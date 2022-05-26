@@ -273,7 +273,7 @@ void join_all_service_threads(const Schedule *schedule)
 void begin_sequencing(Schedule *schedule)
 {
   // Configure the interval handler.
-  struct sigaction alarm_action = {.sa_handler = (void (*)())Sequencer};
+  struct sigaction alarm_action = {.sa_handler = (void (*)(int))Sequencer};
   attempt(
       sigaction(SIGALRM, &alarm_action, NULL),
       "sigaction()");
