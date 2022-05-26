@@ -14,7 +14,9 @@ typedef struct Service
   int priority_descending;
   int period;
   int cpu;
+  void (*setup_function)();
   void (*service_function)();
+  void (*teardown_function)();
   int exit_flag;
   sem_t semaphore;
   pthread_t thread_descriptor;

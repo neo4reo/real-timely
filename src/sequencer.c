@@ -1,8 +1,8 @@
 /**
- * Sequencer by Nick McCrea.
- *
- * Built for Real Time Embedded Systems project at University of Colorado
- * Boulder, as taught by Dr. Sam Siewert.
+ * @author Nick McCrea (nickmccrea.com)
+ * @brief Built for Real Time Embedded Systems Project at University of
+ * Colorado Boulder, as taught by Dr. Sam Siewert.
+ * @date 2022
  */
 
 #define _GNU_SOURCE
@@ -40,7 +40,9 @@ Schedule schedule = {
             .period = 30,
             .cpu = 3,
             .exit_flag = FALSE,
-            .service_function = (void (*)())print_beans,
+            .setup_function = print_beans_setup,
+            .service_function = print_beans,
+            .teardown_function = print_beans_teardown,
         },
         {
             .id = 2,
@@ -48,7 +50,9 @@ Schedule schedule = {
             .period = 5,
             .cpu = 3,
             .exit_flag = FALSE,
-            .service_function = (void (*)())print_cornbread,
+            .setup_function = print_cornbread_setup,
+            .service_function = print_cornbread,
+            .teardown_function = print_cornbread_teardown,
         },
         {
             .id = 3,
@@ -56,7 +60,9 @@ Schedule schedule = {
             .period = 20,
             .cpu = 3,
             .exit_flag = FALSE,
-            .service_function = (void (*)())print_pickles,
+            .setup_function = print_pickles_setup,
+            .service_function = print_pickles,
+            .teardown_function = print_pickles_teardown,
         },
     },
 };
@@ -92,6 +98,10 @@ void *ServiceThread(void *thread_parameters)
   // Cast the thread parameters so the compiler can handle them.
   Service *service = (Service *)thread_parameters;
 
+  // Run the service's setup function.
+  if (service->setup_function != 0)
+    (service->setup_function)();
+
   unsigned int request_counter = 0;
   while (TRUE)
   {
@@ -100,7 +110,14 @@ void *ServiceThread(void *thread_parameters)
 
     // Exit the thread if indicated.
     if (service->exit_flag)
+    {
+      // Run the service's teardown function.
+      if (service->teardown_function != 0)
+        (service->teardown_function)();
+
+      // Terminate the thread.
       pthread_exit((void *)0);
+    }
 
     // Begin new service request by incrementing the counter.
     ++request_counter;
