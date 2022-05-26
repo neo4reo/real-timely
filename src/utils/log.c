@@ -1,4 +1,3 @@
-#define _GNU_SOURCE
 #include <sched.h>
 #include <stdarg.h>
 #include <stdio.h>
