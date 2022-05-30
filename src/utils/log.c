@@ -13,10 +13,9 @@ struct timespec start_time, current_time;
 struct sched_param schedule_parameters;
 
 /**
- * Erase the syslog file and open a new log stream, and record logging start
- * time.
+ * Erase the syslog file and open a new log stream.
  */
-void start_log(const char *log_prefix)
+void reset_log(const char *log_prefix)
 {
   static char command[100] = "";
   strcat(command, "echo \"");
@@ -24,7 +23,13 @@ void start_log(const char *log_prefix)
   strcat(command, " $(uname -a)\" | tee /var/log/syslog");
   system(command);
   openlog(log_prefix, LOG_NDELAY, LOG_DAEMON);
+}
 
+/**
+ * @brief Start the log timer for measuring elapsed time.
+ */
+void start_log_timer()
+{
   get_current_monotonic_raw_time(&start_time);
 }
 
