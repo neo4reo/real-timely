@@ -13,7 +13,7 @@ struct timespec start_time, current_time;
 struct sched_param schedule_parameters;
 
 /**
- * Erase the syslog file and open a new log stream.
+ * @brief Erase the syslog file and open a new log stream.
  */
 void reset_log(const char *log_prefix)
 {
