@@ -1,11 +1,10 @@
 /**
  * @author Nick McCrea (nickmccrea.com)
- * @brief Built for Real Time Embedded Systems Project at University of
- * Colorado Boulder, as taught by Dr. Sam Siewert.
+ * @brief Final project for Real Time Embedded Systems series, University of
+ * Colorado Boulder's online MSEE. Instructor Dr. Sam Siewert.
  * @date 2022
  */
 
-#define _GNU_SOURCE
 #include <errno.h>
 #include <pthread.h>
 #include <semaphore.h>
@@ -101,6 +100,11 @@ void *ServiceThread(void *thread_parameters)
   // Run the service's setup function.
   if (service->setup_function != 0)
     (service->setup_function)();
+
+  // Allow sequencer to proceed.
+  attempt(
+      sem_post(&service->setup_semaphore),
+      "sem_post()");
 
   unsigned int request_counter = 0;
   while (TRUE)
@@ -225,6 +229,7 @@ void initialize_real_time_thread_attributes(
  */
 void start_all_services(const Schedule *schedule)
 {
+  // Start each service thread.
   for (int index = 0; index < schedule->number_of_services; ++index)
   {
     Service *service = &schedule->services[index];
@@ -241,6 +246,10 @@ void start_all_services(const Schedule *schedule)
         sem_init(&service->semaphore, 0, 0),
         "sem_init()");
 
+    attempt(
+        sem_init(&service->setup_semaphore, 0, 0),
+        "sem_init()");
+
     // Start the service's thread.
     errno = pthread_create(
         &service->thread_descriptor,
@@ -249,6 +258,13 @@ void start_all_services(const Schedule *schedule)
         service);
     if (errno)
       print_with_errno_and_exit("pthread_create()");
+  }
+
+  // Wait for each service thread to finish setup.
+  for (int index = 0; index < schedule->number_of_services; ++index)
+  {
+    Service *service = &schedule->services[index];
+    attempt(sem_wait(&service->setup_semaphore), "sem_wait()");
   }
 }
 
@@ -290,7 +306,7 @@ void begin_sequencing(Schedule *schedule)
       "timer_create()");
 
   // Start the timer.
-  start_log(LOG_PREFIX);
+  start_log_timer();
   attempt(
       timer_settime(
           schedule->timer,
@@ -346,6 +362,8 @@ void validate_current_thread_is_real_time()
 
 int main()
 {
+  reset_log(LOG_PREFIX);
+
   set_current_thread_to_real_time(schedule.sequencer_cpu);
   validate_current_thread_is_real_time();
 
