@@ -21,10 +21,6 @@
  * @brief The frame pipeline resources.
  */
 FramePipeline frame_pipeline = {
-    .available_frame_queue_name = "/available_frame_queue",
-    .captured_frame_queue_name = "/captured_frame_queue",
-    .difference_frame_queue_name = "/difference_frame_queue",
-    .selected_frame_queue_name = "/selected_frame_queue",
     .message_queue_attributes = {
         .mq_maxmsg = NUMBER_OF_FRAME_BUFFERS,
         .mq_msgsize = sizeof(cv::Mat *),
@@ -216,8 +212,8 @@ void initialize_real_time_thread_attributes(
 void initialize_frame_pipeline(FramePipeline *frame_pipeline)
 {
   // Initialize the available frame queue
-  mq_unlink(frame_pipeline->available_frame_queue_name);
-  frame_pipeline->available_frame_queue = mq_open(frame_pipeline->available_frame_queue_name,
+  mq_unlink(AVAILABLE_FRAME_QUEUE_NAME);
+  frame_pipeline->available_frame_queue = mq_open(AVAILABLE_FRAME_QUEUE_NAME,
                                                   O_CREAT | O_RDWR,
                                                   S_IRWXU,
                                                   &frame_pipeline->message_queue_attributes);
@@ -225,8 +221,8 @@ void initialize_frame_pipeline(FramePipeline *frame_pipeline)
     print_with_errno_and_exit("mq_open() available_frame_queue");
 
   // Initialize the captured frame queue
-  mq_unlink(frame_pipeline->captured_frame_queue_name);
-  frame_pipeline->captured_frame_queue = mq_open(frame_pipeline->captured_frame_queue_name,
+  mq_unlink(CAPTURED_FRAME_QUEUE_NAME);
+  frame_pipeline->captured_frame_queue = mq_open(CAPTURED_FRAME_QUEUE_NAME,
                                                  O_CREAT | O_RDWR,
                                                  S_IRWXU,
                                                  &frame_pipeline->message_queue_attributes);
@@ -234,8 +230,8 @@ void initialize_frame_pipeline(FramePipeline *frame_pipeline)
     print_with_errno_and_exit("mq_open() captured_frame_queue");
 
   // Initialize the difference frame queue
-  mq_unlink(frame_pipeline->difference_frame_queue_name);
-  frame_pipeline->difference_frame_queue = mq_open(frame_pipeline->difference_frame_queue_name,
+  mq_unlink(DIFFERENCE_FRAME_QUEUE_NAME);
+  frame_pipeline->difference_frame_queue = mq_open(DIFFERENCE_FRAME_QUEUE_NAME,
                                                    O_CREAT | O_RDWR,
                                                    S_IRWXU,
                                                    &frame_pipeline->message_queue_attributes);
@@ -243,8 +239,8 @@ void initialize_frame_pipeline(FramePipeline *frame_pipeline)
     print_with_errno_and_exit("mq_open() difference_frame_queue");
 
   // Initialize the selected frame queue
-  mq_unlink(frame_pipeline->selected_frame_queue_name);
-  frame_pipeline->selected_frame_queue = mq_open(frame_pipeline->selected_frame_queue_name,
+  mq_unlink(SELECTED_FRAME_QUEUE_NAME);
+  frame_pipeline->selected_frame_queue = mq_open(SELECTED_FRAME_QUEUE_NAME,
                                                  O_CREAT | O_RDWR,
                                                  S_IRWXU,
                                                  &frame_pipeline->message_queue_attributes);
@@ -259,19 +255,19 @@ void uninitialize_frame_pipeline(FramePipeline *frame_pipeline)
 {
   // Close the available message queue.
   attempt(mq_close(frame_pipeline->available_frame_queue), "mq_close() available_frame_queue");
-  mq_unlink(frame_pipeline->available_frame_queue_name);
+  mq_unlink(AVAILABLE_FRAME_QUEUE_NAME);
 
   // Close the captured message queue.
   attempt(mq_close(frame_pipeline->captured_frame_queue), "mq_close() captured_frame_queue");
-  mq_unlink(frame_pipeline->captured_frame_queue_name);
+  mq_unlink(CAPTURED_FRAME_QUEUE_NAME);
 
   // Close the difference message queue.
   attempt(mq_close(frame_pipeline->difference_frame_queue), "mq_close() difference_frame_queue");
-  mq_unlink(frame_pipeline->difference_frame_queue_name);
+  mq_unlink(DIFFERENCE_FRAME_QUEUE_NAME);
 
   // Close the selected message queue.
   attempt(mq_close(frame_pipeline->selected_frame_queue), "mq_close() selected_frame_queue");
-  mq_unlink(frame_pipeline->selected_frame_queue_name);
+  mq_unlink(SELECTED_FRAME_QUEUE_NAME);
 }
 
 /**

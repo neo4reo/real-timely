@@ -14,6 +14,11 @@
 #define NUMBER_OF_SERVICES (1)
 #define NUMBER_OF_FRAME_BUFFERS (10)
 
+#define AVAILABLE_FRAME_QUEUE_NAME "/available_frame_queue"
+#define CAPTURED_FRAME_QUEUE_NAME "/captured_frame_queue"
+#define DIFFERENCE_FRAME_QUEUE_NAME "/difference_frame_queue"
+#define SELECTED_FRAME_QUEUE_NAME "/selected_frame_queue"
+
 /**
  * @brief A struct containing all of the resources used by the real-time system
  * for processing frames.
@@ -21,13 +26,9 @@
 typedef struct FramePipeline
 {
   cv::Mat frame_buffers[NUMBER_OF_FRAME_BUFFERS];
-  const char *available_frame_queue_name;
   mqd_t available_frame_queue;
-  const char *captured_frame_queue_name;
   mqd_t captured_frame_queue;
-  const char *difference_frame_queue_name;
   mqd_t difference_frame_queue;
-  const char *selected_frame_queue_name;
   mqd_t selected_frame_queue;
   struct mq_attr message_queue_attributes;
 } FramePipeline;
