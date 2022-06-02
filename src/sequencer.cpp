@@ -17,22 +17,16 @@
 #include "utils/log.h"
 #include "utils/time.h"
 
-cv::Mat frame_buffers[10];
-
 /**
  * @brief The frame pipeline resources.
  */
 FramePipeline frame_pipeline = {
-    // TODO NICK: Extract the queue size.
-    .number_of_frame_buffers = 10,
-    .frame_buffers = frame_buffers,
     .available_frame_queue_name = "/available_frame_queue",
     .captured_frame_queue_name = "/captured_frame_queue",
     .difference_frame_queue_name = "/difference_frame_queue",
     .selected_frame_queue_name = "/selected_frame_queue",
     .message_queue_attributes = {
-        // TODO NICK: Extract the queue size.
-        .mq_maxmsg = 10,
+        .mq_maxmsg = NUMBER_OF_FRAME_BUFFERS,
         .mq_msgsize = sizeof(cv::Mat *),
     }};
 
@@ -44,8 +38,7 @@ Schedule schedule = {
     .maximum_iterations = 120,
     .iteration_counter = 0,
     .sequencer_cpu = 0,
-    .number_of_services = NUMBER_OF_SERVICES,
-    .services = (Service[NUMBER_OF_SERVICES]){
+    .services = {
         {
             .id = 1,
             .name = "Print Beans",
@@ -74,8 +67,8 @@ int compare_service_periods(const void *a, const void *b)
  */
 void assign_service_priorities(Schedule *schedule)
 {
-  qsort(schedule->services, schedule->number_of_services, sizeof(Service), compare_service_periods);
-  for (int index = 0; index < schedule->number_of_services; ++index)
+  qsort(schedule->services, NUMBER_OF_SERVICES, sizeof(Service), compare_service_periods);
+  for (int index = 0; index < NUMBER_OF_SERVICES; ++index)
     schedule->services[index].priority_descending = index + 1;
 }
 
@@ -145,7 +138,7 @@ void terminate_all_services(Schedule *schedule)
           "timer_settime()");
 
   // Set all services to terminate.
-  for (int index = 0; index < schedule->number_of_services; ++index)
+  for (int index = 0; index < NUMBER_OF_SERVICES; ++index)
   {
     services[index].exit_flag = TRUE;
     attempt(
@@ -163,7 +156,7 @@ void Sequencer(int signal_number)
   write_log("Sequencer: %llu", schedule.iteration_counter);
 
   // Release all the services that are scheduled for this time unit.
-  for (int index = 0; index < schedule.number_of_services; ++index)
+  for (int index = 0; index < NUMBER_OF_SERVICES; ++index)
   {
     Service *service = &schedule.services[index];
     if ((schedule.iteration_counter % service->period) == 0)
@@ -249,7 +242,7 @@ void uninitialize_frame_pipeline(FramePipeline *frame_pipeline)
 void start_all_service_threads(Schedule *schedule, FramePipeline *frame_pipeline)
 {
   // Start each service thread.
-  for (int index = 0; index < schedule->number_of_services; ++index)
+  for (int index = 0; index < NUMBER_OF_SERVICES; ++index)
   {
     Service *service = &schedule->services[index];
 
@@ -285,7 +278,7 @@ void start_all_service_threads(Schedule *schedule, FramePipeline *frame_pipeline
   }
 
   // Wait for each service thread to finish setup.
-  for (int index = 0; index < schedule->number_of_services; ++index)
+  for (int index = 0; index < NUMBER_OF_SERVICES; ++index)
   {
     Service *service = &schedule->services[index];
     attempt(sem_wait(&service->setup_semaphore), "sem_wait()");
@@ -296,9 +289,9 @@ void start_all_service_threads(Schedule *schedule, FramePipeline *frame_pipeline
  * @brief Join the calling thread to all of the running service threads in the
  * given schedule.
  */
-void join_all_service_threads(const Schedule *schedule)
+void join_all_service_threads(Schedule *schedule)
 {
-  for (int index = 0; index < schedule->number_of_services; ++index)
+  for (int index = 0; index < NUMBER_OF_SERVICES; ++index)
   {
     Service *service = &schedule->services[index];
     errno = pthread_join(service->thread_descriptor, NULL);

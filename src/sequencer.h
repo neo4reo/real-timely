@@ -6,12 +6,13 @@
 #include <pthread.h>
 #include <semaphore.h>
 
+#define TRUE (1)
+#define FALSE (0)
+
 #define LOG_PREFIX "[REAL TIMELY]"
 
 #define NUMBER_OF_SERVICES (1)
-
-#define TRUE (1)
-#define FALSE (0)
+#define NUMBER_OF_FRAME_BUFFERS (10)
 
 /**
  * @brief A struct containing all of the resources used by the real-time system
@@ -19,8 +20,7 @@
  */
 typedef struct FramePipeline
 {
-  const unsigned int number_of_frame_buffers;
-  cv::Mat *frame_buffers;
+  cv::Mat frame_buffers[NUMBER_OF_FRAME_BUFFERS];
   const char *available_frame_queue_name;
   mqd_t available_frame_queue;
   const char *captured_frame_queue_name;
@@ -62,8 +62,7 @@ typedef struct Schedule
   const unsigned long long maximum_iterations;
   unsigned long long iteration_counter;
   const int sequencer_cpu;
-  const unsigned int number_of_services;
-  Service *services;
+  Service services[NUMBER_OF_SERVICES];
   timer_t timer;
   struct itimerspec timer_interval;
 } Schedule;

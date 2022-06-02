@@ -24,7 +24,7 @@ cv::VideoCapture video_capture;
 void capture_frame_setup(FramePipeline *frame_pipeline)
 {
   // Enqueue all of the frame buffers.
-  for (int index = 0; index < frame_pipeline->number_of_frame_buffers; ++index)
+  for (int index = 0; index < NUMBER_OF_FRAME_BUFFERS; ++index)
   {
     cv::Mat *frame_buffer = &frame_pipeline->frame_buffers[index];
     attempt(mq_send(
