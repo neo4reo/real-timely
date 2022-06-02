@@ -13,6 +13,14 @@ struct timespec start_time, current_time;
 struct sched_param schedule_parameters;
 
 /**
+ * @brief Start the log timer for measuring elapsed time.
+ */
+void start_log_timer()
+{
+  get_current_monotonic_raw_time(&start_time);
+}
+
+/**
  * @brief Erase the syslog file and open a new log stream.
  */
 void reset_log(const char *log_prefix)
@@ -26,18 +34,36 @@ void reset_log(const char *log_prefix)
 }
 
 /**
- * @brief Start the log timer for measuring elapsed time.
+ * @brief Generate a log message, prefixed with the CPU and priority of the
+ * caller, followed by the given formatted message.
  */
-void start_log_timer()
+void write_log(const char *format, ...)
 {
-  get_current_monotonic_raw_time(&start_time);
+  // Get the CPU.
+  int cpu = attempt(sched_getcpu(), "sched_getcpu()");
+
+  // Get the scheduler priority.
+  sched_getparam(0, &schedule_parameters);
+  int max_priority = sched_get_priority_max(sched_getscheduler(0));
+  int priority_descending = max_priority - schedule_parameters.sched_priority;
+
+  // Prefix the message.
+  static char message[500] = "";
+  sprintf(message, "CPU: %i, Priority: %i, ", cpu, priority_descending);
+  strcat(message, format);
+
+  va_list arguments;
+  va_start(arguments, format);
+  vsyslog(LOG_INFO, message, arguments);
+  va_end(arguments);
 }
 
 /**
- * @brief Generate a log message, prefixed with the elapsed time and the CPU
- * and priority of the caller, followed by the given formatted message.
+ * @brief Generate a log message, prefixed with the CPU and priority of the
+ * caller, followed by the elapsed time, followed by the given formatted
+ * message.
  */
-void write_log(const char *format, ...)
+void write_log_with_timer(const char *format, ...)
 {
   // Get the elapsed log time.
   get_current_monotonic_raw_time(&current_time);
@@ -53,7 +79,7 @@ void write_log(const char *format, ...)
 
   // Prefix the message.
   static char message[500] = "";
-  sprintf(message, "Elapsed: %6.9lf, CPU: %i, Priority: %i, ", elapsed_time, cpu, priority_descending);
+  sprintf(message, "CPU: %i, Priority: %i, Elapsed: %6.9lf, ", cpu, priority_descending, elapsed_time);
   strcat(message, format);
 
   va_list arguments;

@@ -37,7 +37,7 @@ Schedule schedule = {
     .services = {
         {
             .id = 1,
-            .name = "Print Beans",
+            .name = "Capture Frame",
             .period = 30,
             .cpu = 3,
             .exit_flag = FALSE,
@@ -110,9 +110,9 @@ void *ServiceThread(void *thread_parameters)
     ++request_counter;
 
     // Perform the work.
-    write_log("Service: %i, Service Name: %s, Request: %u, Begin", service->id, service->name, request_counter);
+    write_log_with_timer("Service: %i, Service Name: %s, Request: %u, Begin", service->id, service->name, request_counter);
     (service->service_function)(frame_pipeline);
-    write_log("Service: %i, Service Name: %s, Request: %u, Done", service->id, service->name, request_counter);
+    write_log_with_timer("Service: %i, Service Name: %s, Request: %u, Done", service->id, service->name, request_counter);
   }
 }
 
@@ -149,7 +149,7 @@ void terminate_all_services(Schedule *schedule)
  */
 void Sequencer(int signal_number)
 {
-  write_log("Sequencer: %llu", schedule.iteration_counter);
+  write_log_with_timer("Sequencer: %llu", schedule.iteration_counter);
 
   // Release all the services that are scheduled for this time unit.
   for (int index = 0; index < NUMBER_OF_SERVICES; ++index)
@@ -299,6 +299,7 @@ void start_all_service_threads(Schedule *schedule, FramePipeline *frame_pipeline
         "sem_init()");
 
     // Start the service's thread.
+    write_log("Starting service %i (%s)...", service->id, service->name);
     ServiceThreadParameters service_thread_parameters = {
         .service = service,
         .frame_pipeline = frame_pipeline,
@@ -310,6 +311,7 @@ void start_all_service_threads(Schedule *schedule, FramePipeline *frame_pipeline
         &service_thread_parameters);
     if (errno)
       print_with_errno_and_exit("pthread_create()");
+    write_log("Started service %i (%s)", service->id, service->name);
   }
 
   // Wait for each service thread to finish setup.
