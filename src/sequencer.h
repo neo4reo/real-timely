@@ -11,7 +11,7 @@
 
 #define LOG_PREFIX "[REAL TIMELY]"
 
-#define NUMBER_OF_SERVICES (1)
+#define NUMBER_OF_SERVICES (2)
 #define NUMBER_OF_FRAME_BUFFERS (10)
 
 #define AVAILABLE_FRAME_QUEUE_NAME "/available_frame_queue"

@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "services/capture_frame.h"
+#include "services/write_frame.h"
 #include "sequencer.h"
 #include "utils/error.h"
 #include "utils/log.h"
@@ -44,6 +45,16 @@ Schedule schedule = {
             .setup_function = capture_frame_setup,
             .service_function = capture_frame,
             .teardown_function = capture_frame_teardown,
+        },
+        {
+            .id = 2,
+            .name = "Write Frame",
+            .period = 30,
+            .cpu = 3,
+            .exit_flag = FALSE,
+            .setup_function = write_frame_setup,
+            .service_function = write_frame,
+            .teardown_function = write_frame_teardown,
         },
     }};
 
