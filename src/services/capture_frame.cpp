@@ -23,27 +23,30 @@ cv::VideoCapture video_capture;
  */
 void capture_frame_setup(FramePipeline *frame_pipeline)
 {
-  // Enqueue all of the frame buffers.
+  // Start the camera.
+  if (!video_capture.open(0))
+    print_error_and_exit("Error at `video_capture.open()`\n");
+
+  // Warm up each frame buffer.
   for (int index = 0; index < NUMBER_OF_FRAME_BUFFERS; ++index)
   {
     cv::Mat *frame_buffer = &frame_pipeline->frame_buffers[index];
+
+    // Write a frame to the buffer. (I think this will initialize memory
+    // allocation.)
+    while (!video_capture.read(*frame_buffer))
+    {
+      std::cout << "No frame.\n";
+      cv::waitKey(25);
+    }
+
+    // Enqueue the frame_buffer.
     attempt(mq_send(
                 frame_pipeline->available_frame_queue,
                 (const char *)&frame_buffer,
                 sizeof(cv::Mat *),
                 0),
             "mq_send()");
-  }
-
-  // Start the camera.
-  if (!video_capture.open(0))
-    print_error_and_exit("Error at `video_capture.open()`\n");
-
-  // Wait for a frame.
-  while (!video_capture.read(frame_pipeline->frame_buffers[0]))
-  {
-    std::cout << "No frame.\n";
-    cv::waitKey(25);
   }
 }
 
@@ -65,12 +68,13 @@ void capture_frame(FramePipeline *frame_pipeline)
   cv::Mat *frame_buffer;
 
   // Dequeue the next available frame buffer.
-  attempt(mq_receive(
-              frame_pipeline->available_frame_queue,
-              (char *)&frame_buffer,
-              sizeof(cv::Mat *),
-              NULL),
-          "mq_receive()");
+  attempt(
+      mq_receive(
+          frame_pipeline->available_frame_queue,
+          (char *)&frame_buffer,
+          sizeof(cv::Mat *),
+          NULL),
+      "mq_receive()");
 
   // Capture a frame.
   if (!video_capture.read(*frame_buffer))
