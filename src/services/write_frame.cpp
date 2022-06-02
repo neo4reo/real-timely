@@ -5,18 +5,20 @@
  * @date 2022
  */
 
+#include <filesystem>
 #include <iomanip>
 #include <ios>
 #include <mqueue.h>
 #include <opencv2/core/cvstd.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <sstream>
+#include <string>
 #include "../sequencer.h"
 #include "../utils/error.h"
 #include "../utils/log.h"
 #include "write_frame.h"
 
-#define FILENAME_PREFIX "frames/frame_"
+#define OUTPUT_DIRECTORY "output"
 #define FILENAME_EXTENSION ".ppm"
 
 unsigned int frame_number{0};
@@ -27,6 +29,12 @@ std::ostringstream filename_number;
  */
 void write_frame_setup(FramePipeline *frame_pipeline)
 {
+  // Make sure the output folder exists.
+  std::filesystem::create_directory(OUTPUT_DIRECTORY);
+
+  // Delete the existing contents of the output folder.
+  for (const auto &entry : std::filesystem::directory_iterator(OUTPUT_DIRECTORY))
+    std::filesystem::remove_all(entry.path());
 }
 
 /**
@@ -56,7 +64,7 @@ void write_frame(FramePipeline *frame_pipeline)
   filename_number.clear();
   filename_number << std::right << std::setfill('0') << std::setw(6) << frame_number;
   cv::imwrite(
-      FILENAME_PREFIX + filename_number.str() + FILENAME_EXTENSION,
+      static_cast<std::string>(OUTPUT_DIRECTORY) + "/" + filename_number.str() + FILENAME_EXTENSION,
       *frame_buffer);
 
   // Increment the frame number.
