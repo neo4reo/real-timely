@@ -215,14 +215,41 @@ void initialize_real_time_thread_attributes(
  */
 void initialize_frame_pipeline(FramePipeline *frame_pipeline)
 {
-  // Initialize the message queue.
+  // Initialize the available frame queue
   mq_unlink(frame_pipeline->available_frame_queue_name);
   frame_pipeline->available_frame_queue = mq_open(frame_pipeline->available_frame_queue_name,
                                                   O_CREAT | O_RDWR,
                                                   S_IRWXU,
                                                   &frame_pipeline->message_queue_attributes);
   if (frame_pipeline->available_frame_queue == -1)
-    print_with_errno_and_exit("mq_open()");
+    print_with_errno_and_exit("mq_open() available_frame_queue");
+
+  // Initialize the captured frame queue
+  mq_unlink(frame_pipeline->captured_frame_queue_name);
+  frame_pipeline->captured_frame_queue = mq_open(frame_pipeline->captured_frame_queue_name,
+                                                 O_CREAT | O_RDWR,
+                                                 S_IRWXU,
+                                                 &frame_pipeline->message_queue_attributes);
+  if (frame_pipeline->captured_frame_queue == -1)
+    print_with_errno_and_exit("mq_open() captured_frame_queue");
+
+  // Initialize the difference frame queue
+  mq_unlink(frame_pipeline->difference_frame_queue_name);
+  frame_pipeline->difference_frame_queue = mq_open(frame_pipeline->difference_frame_queue_name,
+                                                   O_CREAT | O_RDWR,
+                                                   S_IRWXU,
+                                                   &frame_pipeline->message_queue_attributes);
+  if (frame_pipeline->difference_frame_queue == -1)
+    print_with_errno_and_exit("mq_open() difference_frame_queue");
+
+  // Initialize the selected frame queue
+  mq_unlink(frame_pipeline->selected_frame_queue_name);
+  frame_pipeline->selected_frame_queue = mq_open(frame_pipeline->selected_frame_queue_name,
+                                                 O_CREAT | O_RDWR,
+                                                 S_IRWXU,
+                                                 &frame_pipeline->message_queue_attributes);
+  if (frame_pipeline->selected_frame_queue == -1)
+    print_with_errno_and_exit("mq_open() selected_frame_queue");
 }
 
 /**
@@ -230,9 +257,21 @@ void initialize_frame_pipeline(FramePipeline *frame_pipeline)
  */
 void uninitialize_frame_pipeline(FramePipeline *frame_pipeline)
 {
-  // Close the message queue.
+  // Close the available message queue.
   attempt(mq_close(frame_pipeline->available_frame_queue), "mq_close() available_frame_queue");
   mq_unlink(frame_pipeline->available_frame_queue_name);
+
+  // Close the captured message queue.
+  attempt(mq_close(frame_pipeline->captured_frame_queue), "mq_close() captured_frame_queue");
+  mq_unlink(frame_pipeline->captured_frame_queue_name);
+
+  // Close the difference message queue.
+  attempt(mq_close(frame_pipeline->difference_frame_queue), "mq_close() difference_frame_queue");
+  mq_unlink(frame_pipeline->difference_frame_queue_name);
+
+  // Close the selected message queue.
+  attempt(mq_close(frame_pipeline->selected_frame_queue), "mq_close() selected_frame_queue");
+  mq_unlink(frame_pipeline->selected_frame_queue_name);
 }
 
 /**
