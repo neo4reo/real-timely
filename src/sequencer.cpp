@@ -11,17 +11,30 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "services/test_functions.h"
+#include "services/capture_frame.h"
 #include "sequencer.h"
 #include "utils/error.h"
 #include "utils/log.h"
 #include "utils/time.h"
 
-#define LOG_PREFIX "[REAL TIMELY]"
-#define NUMBER_OF_SERVICES (3)
+cv::Mat frame_buffers[10];
 
-#define TRUE (1)
-#define FALSE (0)
+/**
+ * @brief The frame pipeline resources.
+ */
+FramePipeline frame_pipeline = {
+    // TODO NICK: Extract the queue size.
+    .number_of_frame_buffers = 10,
+    .frame_buffers = frame_buffers,
+    .available_frame_queue_name = "/available_frame_queue",
+    .captured_frame_queue_name = "/captured_frame_queue",
+    .difference_frame_queue_name = "/difference_frame_queue",
+    .selected_frame_queue_name = "/selected_frame_queue",
+    .message_queue_attributes = {
+        // TODO NICK: Extract the queue size.
+        .mq_maxmsg = 10,
+        .mq_msgsize = sizeof(cv::Mat *),
+    }};
 
 /**
  * @brief The service schedule.
@@ -39,32 +52,11 @@ Schedule schedule = {
             .period = 30,
             .cpu = 3,
             .exit_flag = FALSE,
-            .setup_function = print_beans_setup,
-            .service_function = print_beans,
-            .teardown_function = print_beans_teardown,
+            .setup_function = capture_frame_setup,
+            .service_function = capture_frame,
+            .teardown_function = capture_frame_teardown,
         },
-        {
-            .id = 2,
-            .name = "Print Cornbread",
-            .period = 5,
-            .cpu = 3,
-            .exit_flag = FALSE,
-            .setup_function = print_cornbread_setup,
-            .service_function = print_cornbread,
-            .teardown_function = print_cornbread_teardown,
-        },
-        {
-            .id = 3,
-            .name = "Print Pickles",
-            .period = 20,
-            .cpu = 3,
-            .exit_flag = FALSE,
-            .setup_function = print_pickles_setup,
-            .service_function = print_pickles,
-            .teardown_function = print_pickles_teardown,
-        },
-    },
-};
+    }};
 
 /**
  * @brief Compare two services' periods for sorting priority.
@@ -94,12 +86,14 @@ void assign_service_priorities(Schedule *schedule)
  */
 void *ServiceThread(void *thread_parameters)
 {
-  // Cast the thread parameters so the compiler can handle them.
-  Service *service = (Service *)thread_parameters;
+  // Unpack the thread parameters.
+  ServiceThreadParameters *service_thread_parameters = (ServiceThreadParameters *)thread_parameters;
+  Service *service = service_thread_parameters->service;
+  FramePipeline *frame_pipeline = service_thread_parameters->frame_pipeline;
 
   // Run the service's setup function.
   if (service->setup_function != 0)
-    (service->setup_function)();
+    (service->setup_function)(frame_pipeline);
 
   // Allow sequencer to proceed.
   attempt(
@@ -117,7 +111,7 @@ void *ServiceThread(void *thread_parameters)
     {
       // Run the service's teardown function.
       if (service->teardown_function != 0)
-        (service->teardown_function)();
+        (service->teardown_function)(frame_pipeline);
 
       // Terminate the thread.
       pthread_exit((void *)0);
@@ -128,7 +122,7 @@ void *ServiceThread(void *thread_parameters)
 
     // Perform the work.
     write_log("Service: %i, Service Name: %s, Request: %u, Begin", service->id, service->name, request_counter);
-    (service->service_function)();
+    (service->service_function)(frame_pipeline);
     write_log("Service: %i, Service Name: %s, Request: %u, Done", service->id, service->name, request_counter);
   }
 }
@@ -224,10 +218,35 @@ void initialize_real_time_thread_attributes(
 }
 
 /**
+ * @brief Initialize the resources used by the frame pipeline.
+ */
+void initialize_frame_pipeline(FramePipeline *frame_pipeline)
+{
+  // Initialize the message queue.
+  mq_unlink(frame_pipeline->available_frame_queue_name);
+  frame_pipeline->available_frame_queue = mq_open(frame_pipeline->available_frame_queue_name,
+                                                  O_CREAT | O_RDWR,
+                                                  S_IRWXU,
+                                                  &frame_pipeline->message_queue_attributes);
+  if (frame_pipeline->available_frame_queue == -1)
+    print_with_errno_and_exit("mq_open()");
+}
+
+/**
+ * @brief Release the resources used by the frame pipeline.
+ */
+void uninitialize_frame_pipeline(FramePipeline *frame_pipeline)
+{
+  // Close the message queue.
+  attempt(mq_close(frame_pipeline->available_frame_queue), "mq_close() available_frame_queue");
+  mq_unlink(frame_pipeline->available_frame_queue_name);
+}
+
+/**
  * @brief Initialize and start all of the service threads for the the given
  * schedule.
  */
-void start_all_services(const Schedule *schedule)
+void start_all_service_threads(Schedule *schedule, FramePipeline *frame_pipeline)
 {
   // Start each service thread.
   for (int index = 0; index < schedule->number_of_services; ++index)
@@ -241,21 +260,26 @@ void start_all_services(const Schedule *schedule)
         service->cpu,
         service->priority_descending);
 
+    // Initialize the service's setup semaphore to block until released.
+    attempt(
+        sem_init(&service->setup_semaphore, 0, 0),
+        "sem_init()");
+
     // Initialize the service's semaphore to block until released.
     attempt(
         sem_init(&service->semaphore, 0, 0),
         "sem_init()");
 
-    attempt(
-        sem_init(&service->setup_semaphore, 0, 0),
-        "sem_init()");
-
     // Start the service's thread.
+    ServiceThreadParameters service_thread_parameters = {
+        .service = service,
+        .frame_pipeline = frame_pipeline,
+    };
     errno = pthread_create(
         &service->thread_descriptor,
         &service->thread_attributes,
         ServiceThread,
-        service);
+        &service_thread_parameters);
     if (errno)
       print_with_errno_and_exit("pthread_create()");
   }
@@ -366,10 +390,12 @@ int main()
 
   set_current_thread_to_real_time(schedule.sequencer_cpu);
   validate_current_thread_is_real_time();
+  initialize_frame_pipeline(&frame_pipeline);
 
   assign_service_priorities(&schedule);
-  start_all_services(&schedule);
+  start_all_service_threads(&schedule, &frame_pipeline);
   begin_sequencing(&schedule);
 
   join_all_service_threads(&schedule);
+  uninitialize_frame_pipeline(&frame_pipeline);
 }

@@ -1,8 +1,36 @@
 #ifndef SEQUENCER_H
 #define SEQUENCER_H
 
+#include <mqueue.h>
+#include <opencv2/videoio.hpp>
 #include <pthread.h>
 #include <semaphore.h>
+
+#define LOG_PREFIX "[REAL TIMELY]"
+
+#define NUMBER_OF_SERVICES (1)
+
+#define TRUE (1)
+#define FALSE (0)
+
+/**
+ * @brief A struct containing all of the resources used by the real-time system
+ * for processing frames.
+ */
+typedef struct FramePipeline
+{
+  const unsigned int number_of_frame_buffers;
+  cv::Mat *frame_buffers;
+  const char *available_frame_queue_name;
+  mqd_t available_frame_queue;
+  const char *captured_frame_queue_name;
+  mqd_t captured_frame_queue;
+  const char *difference_frame_queue_name;
+  mqd_t difference_frame_queue;
+  const char *selected_frame_queue_name;
+  mqd_t selected_frame_queue;
+  struct mq_attr message_queue_attributes;
+} FramePipeline;
 
 /**
  * @brief A struct containing the properties of a single real-time service.
@@ -14,9 +42,9 @@ typedef struct Service
   const int period;
   const int cpu;
   int exit_flag;
-  void (*setup_function)();
-  void (*service_function)();
-  void (*teardown_function)();
+  void (*setup_function)(FramePipeline *);
+  void (*service_function)(FramePipeline *);
+  void (*teardown_function)(FramePipeline *);
   int priority_descending;
   sem_t setup_semaphore;
   sem_t semaphore;
@@ -35,9 +63,18 @@ typedef struct Schedule
   unsigned long long iteration_counter;
   const int sequencer_cpu;
   const unsigned int number_of_services;
-  struct Service *services;
+  Service *services;
   timer_t timer;
   struct itimerspec timer_interval;
 } Schedule;
+
+/**
+ * @brief The parameters object to pass into to each service thread.
+ */
+typedef struct ServiceThreadParameters
+{
+  Service *service;
+  FramePipeline *frame_pipeline;
+} ServiceThreadParameters;
 
 #endif
