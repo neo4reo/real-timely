@@ -64,10 +64,8 @@ void capture_frame_teardown(FramePipeline *frame_pipeline)
  */
 void capture_frame(FramePipeline *frame_pipeline)
 {
-  // Get the next available frame buffer.
-  cv::Mat *frame_buffer;
-
   // Dequeue the next available frame buffer.
+  cv::Mat *frame_buffer;
   attempt(
       mq_receive(
           frame_pipeline->available_frame_queue,
