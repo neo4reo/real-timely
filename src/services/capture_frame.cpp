@@ -46,7 +46,7 @@ void capture_frame_setup(FramePipeline *frame_pipeline)
                 (const char *)&frame_buffer,
                 sizeof(cv::Mat *),
                 0),
-            "mq_send()");
+            "mq_send() available_frame_queue");
   }
 }
 
@@ -74,7 +74,7 @@ void capture_frame(FramePipeline *frame_pipeline)
           (char *)&frame_buffer,
           sizeof(cv::Mat *),
           NULL),
-      "mq_receive()");
+      "mq_receive() available_frame_queue");
 
   // Capture a frame.
   if (!video_capture.read(*frame_buffer))
@@ -82,4 +82,13 @@ void capture_frame(FramePipeline *frame_pipeline)
     std::cout << "No frame.\n";
     cv::waitKey(25);
   }
+
+  // Enqueue the captured frame buffer.
+  attempt(
+      mq_send(
+          frame_pipeline->captured_frame_queue,
+          (const char *)&frame_buffer,
+          sizeof(cv::Mat *),
+          0),
+      "mq_send() captured_frame_queue");
 }
