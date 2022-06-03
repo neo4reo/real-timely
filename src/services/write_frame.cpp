@@ -53,11 +53,11 @@ void write_frame(FramePipeline *frame_pipeline)
   cv::Mat *frame_buffer;
   attempt(
       mq_receive(
-          frame_pipeline->captured_frame_queue,
+          frame_pipeline->difference_frame_queue,
           (char *)&frame_buffer,
           sizeof(cv::Mat *),
           NULL),
-      "mq_receive() captured_frame_queue");
+      "mq_receive() difference_frame_queue");
 
   // Write the frame to disk.
   filename_number.str("");
