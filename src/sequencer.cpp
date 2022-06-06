@@ -12,6 +12,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "services/capture_frame.h"
+#include "services/difference_frame.h"
+#include "services/select_frame.h"
 #include "services/write_frame.h"
 #include "sequencer.h"
 #include "utils/error.h"
@@ -31,15 +33,15 @@ FramePipeline frame_pipeline = {
  * @brief The service schedule.
  */
 Schedule schedule = {
-    .frequency = 60,
-    .maximum_iterations = 120,
+    .frequency = 20,
+    .maximum_iterations = 200,
     .iteration_counter = 0,
     .sequencer_cpu = 0,
     .services = {
         {
             .id = 1,
             .name = "Capture Frame",
-            .period = 30,
+            .period = 10,
             .cpu = 3,
             .exit_flag = FALSE,
             .frame_pipeline = &frame_pipeline,
@@ -49,8 +51,30 @@ Schedule schedule = {
         },
         {
             .id = 2,
+            .name = "Difference Frame",
+            .period = 10,
+            .cpu = 3,
+            .exit_flag = FALSE,
+            .frame_pipeline = &frame_pipeline,
+            .setup_function = difference_frame_setup,
+            .service_function = difference_frame,
+            .teardown_function = difference_frame_teardown,
+        },
+        {
+            .id = 3,
+            .name = "Select Frame",
+            .period = 10,
+            .cpu = 3,
+            .exit_flag = FALSE,
+            .frame_pipeline = &frame_pipeline,
+            .setup_function = select_frame_setup,
+            .service_function = select_frame,
+            .teardown_function = select_frame_teardown,
+        },
+        {
+            .id = 4,
             .name = "Write Frame",
-            .period = 30,
+            .period = 10,
             .cpu = 3,
             .exit_flag = FALSE,
             .frame_pipeline = &frame_pipeline,
