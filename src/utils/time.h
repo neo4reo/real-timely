@@ -5,6 +5,7 @@
 
 #define NANOSECONDS_PER_SECOND (1000000000)
 #define NANOSECONDS_PER_MILLSECOND (1000000)
+#define MICROSECONDS_PER_SECOND (1000000)
 
 void get_current_monotonic_raw_time(struct timespec *result);
 void get_current_realtime_time(struct timespec *result);

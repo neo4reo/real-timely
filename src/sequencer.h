@@ -22,9 +22,11 @@
 /**
  * @brief A structure containing a frame buffer and associated metadata.
  */
-typedef struct Frame {
+typedef struct Frame
+{
   cv::Mat frame_buffer;
-  unsigned int difference_result;
+  unsigned int difference_absolute;
+  double difference_percentage;
 } Frame;
 
 /**
