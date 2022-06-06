@@ -42,6 +42,7 @@ Schedule schedule = {
             .period = 30,
             .cpu = 3,
             .exit_flag = FALSE,
+            .frame_pipeline = &frame_pipeline,
             .setup_function = capture_frame_setup,
             .service_function = capture_frame,
             .teardown_function = capture_frame_teardown,
@@ -52,6 +53,7 @@ Schedule schedule = {
             .period = 30,
             .cpu = 3,
             .exit_flag = FALSE,
+            .frame_pipeline = &frame_pipeline,
             .setup_function = write_frame_setup,
             .service_function = write_frame,
             .teardown_function = write_frame_teardown,
@@ -86,14 +88,14 @@ void assign_service_priorities(Schedule *schedule)
  */
 void *ServiceThread(void *thread_parameters)
 {
-  // Unpack the thread parameters.
-  ServiceThreadParameters *service_thread_parameters = (ServiceThreadParameters *)thread_parameters;
-  Service *service = service_thread_parameters->service;
-  FramePipeline *frame_pipeline = service_thread_parameters->frame_pipeline;
+  // // Unpack the thread parameters.
+  Service *service = (Service *)thread_parameters;
 
   // Run the service's setup function.
+  write_log("Service: %i (%s) setup starting...", service->id, service->name);
   if (service->setup_function != 0)
-    (service->setup_function)(frame_pipeline);
+    (service->setup_function)(service->frame_pipeline);
+  write_log("Service: %i (%s) setup complete", service->id, service->name);
 
   // Allow sequencer to proceed.
   attempt(
@@ -111,7 +113,7 @@ void *ServiceThread(void *thread_parameters)
     {
       // Run the service's teardown function.
       if (service->teardown_function != 0)
-        (service->teardown_function)(frame_pipeline);
+        (service->teardown_function)(service->frame_pipeline);
 
       // Terminate the thread.
       pthread_exit((void *)0);
@@ -122,7 +124,7 @@ void *ServiceThread(void *thread_parameters)
 
     // Perform the work.
     write_log_with_timer("Service: %i, Service Name: %s, Request: %u, Begin", service->id, service->name, request_counter);
-    (service->service_function)(frame_pipeline);
+    (service->service_function)(service->frame_pipeline);
     write_log_with_timer("Service: %i, Service Name: %s, Request: %u, Done", service->id, service->name, request_counter);
   }
 }
@@ -130,7 +132,7 @@ void *ServiceThread(void *thread_parameters)
 /**
  * @brief Terminate a running schedule sequencer.
  */
-void terminate_all_services(Schedule *schedule)
+void terminate_all_service_threads(Schedule *schedule)
 {
   Service *services = schedule->services;
 
@@ -174,7 +176,7 @@ void Sequencer(int signal_number)
   ++schedule.iteration_counter;
 
   if (schedule.iteration_counter >= schedule.maximum_iterations)
-    terminate_all_services(&schedule);
+    terminate_all_service_threads(&schedule);
 }
 
 /**
@@ -292,13 +294,6 @@ void start_all_service_threads(Schedule *schedule, FramePipeline *frame_pipeline
   {
     Service *service = &schedule->services[index];
 
-    // Initialize the thread attributes for real-time.
-    initialize_real_time_thread_attributes(
-        &service->thread_attributes,
-        &service->schedule_parameters,
-        service->cpu,
-        service->priority_descending);
-
     // Initialize the service's setup semaphore to block until released.
     attempt(
         sem_init(&service->setup_semaphore, 0, 0),
@@ -309,17 +304,20 @@ void start_all_service_threads(Schedule *schedule, FramePipeline *frame_pipeline
         sem_init(&service->semaphore, 0, 0),
         "sem_init()");
 
+    // Initialize the thread attributes for real-time.
+    initialize_real_time_thread_attributes(
+        &service->thread_attributes,
+        &service->schedule_parameters,
+        service->cpu,
+        service->priority_descending);
+
     // Start the service's thread.
     write_log("Starting service %i (%s)...", service->id, service->name);
-    ServiceThreadParameters service_thread_parameters = {
-        .service = service,
-        .frame_pipeline = frame_pipeline,
-    };
     errno = pthread_create(
         &service->thread_descriptor,
         &service->thread_attributes,
         ServiceThread,
-        &service_thread_parameters);
+        service);
     if (errno)
       print_with_errno_and_exit("pthread_create()");
     write_log("Started service %i (%s)", service->id, service->name);

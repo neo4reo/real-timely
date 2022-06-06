@@ -43,6 +43,7 @@ typedef struct Service
   const int period;
   const int cpu;
   int exit_flag;
+  FramePipeline *frame_pipeline;
   void (*setup_function)(FramePipeline *);
   void (*service_function)(FramePipeline *);
   void (*teardown_function)(FramePipeline *);
@@ -67,14 +68,5 @@ typedef struct Schedule
   timer_t timer;
   struct itimerspec timer_interval;
 } Schedule;
-
-/**
- * @brief The parameters object to pass into to each service thread.
- */
-typedef struct ServiceThreadParameters
-{
-  Service *service;
-  FramePipeline *frame_pipeline;
-} ServiceThreadParameters;
 
 #endif
