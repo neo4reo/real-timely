@@ -48,7 +48,7 @@ void write_log(const char *format, ...)
   int priority_descending = max_priority - schedule_parameters.sched_priority;
 
   // Prefix the message.
-  static char message[500] = "";
+  char message[500] = "";
   sprintf(message, "CPU: %i, Priority: %i, ", cpu, priority_descending);
   strcat(message, format);
 
@@ -78,7 +78,7 @@ void write_log_with_timer(const char *format, ...)
   int priority_descending = max_priority - schedule_parameters.sched_priority;
 
   // Prefix the message.
-  static char message[500] = "";
+  char message[500] = "";
   sprintf(message, "CPU: %i, Priority: %i, Elapsed: %6.9lf, ", cpu, priority_descending, elapsed_time);
   strcat(message, format);
 

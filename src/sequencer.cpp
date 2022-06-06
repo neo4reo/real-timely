@@ -312,7 +312,7 @@ void start_all_service_threads(Schedule *schedule, FramePipeline *frame_pipeline
         service->priority_descending);
 
     // Start the service's thread.
-    write_log("Starting service %i (%s)...", service->id, service->name);
+    write_log("Service: %i (%s) thread create starting...\n", service->id, service->name);
     errno = pthread_create(
         &service->thread_descriptor,
         &service->thread_attributes,
@@ -320,7 +320,7 @@ void start_all_service_threads(Schedule *schedule, FramePipeline *frame_pipeline
         service);
     if (errno)
       print_with_errno_and_exit("pthread_create()");
-    write_log("Started service %i (%s)", service->id, service->name);
+    write_log("Service: %i (%s) thread create complete", service->id, service->name);
   }
 
   // Wait for each service thread to finish setup.
@@ -328,6 +328,7 @@ void start_all_service_threads(Schedule *schedule, FramePipeline *frame_pipeline
   {
     Service *service = &schedule->services[index];
     attempt(sem_wait(&service->setup_semaphore), "sem_wait()");
+    write_log("Service: %i (%s) ready", service->id, service->name);
   }
 }
 
