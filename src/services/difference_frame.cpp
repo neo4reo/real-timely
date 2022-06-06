@@ -30,24 +30,24 @@ void difference_frame_teardown(FramePipeline *frame_pipeline)
  */
 void difference_frame(FramePipeline *frame_pipeline)
 {
-    // Dequeue the next captured frame buffer.
-    cv::Mat *frame_buffer;
-    attempt(
-        mq_receive(
-            frame_pipeline->captured_frame_queue,
-            (char *)&frame_buffer,
-            sizeof(cv::Mat *),
-            NULL),
-        "mq_receive() captured_frame_queue");
+  // Dequeue the next captured frame.
+  Frame *frame;
+  attempt(
+      mq_receive(
+          frame_pipeline->captured_frame_queue,
+          (char *)&frame,
+          sizeof(Frame *),
+          NULL),
+      "mq_receive() captured_frame_queue");
 
-    // TODO NICK: Implement
+  // TODO NICK: Implement
 
-    // Enqueue the difference frame buffer.
-    attempt(
-        mq_send(
-            frame_pipeline->difference_frame_queue,
-            (const char *)&frame_buffer,
-            sizeof(cv::Mat *),
-            0),
-        "mq_send() difference_frame_queue");
+  // Enqueue the difference frame.
+  attempt(
+      mq_send(
+          frame_pipeline->difference_frame_queue,
+          (const char *)&frame,
+          sizeof(Frame *),
+          0),
+      "mq_send() difference_frame_queue");
 }

@@ -28,23 +28,23 @@ void capture_frame_setup(FramePipeline *frame_pipeline)
     print_error_and_exit("Error at `video_capture.open()`\n");
 
   // Warm up each frame buffer.
-  for (int index = 0; index < NUMBER_OF_FRAME_BUFFERS; ++index)
+  for (int index = 0; index < NUMBER_OF_FRAMES; ++index)
   {
-    cv::Mat *frame_buffer = &frame_pipeline->frame_buffers[index];
+    Frame *frame = &frame_pipeline->frames[index];
 
     // Write a frame to the buffer. (I think this will initialize memory
     // allocation.)
-    while (!video_capture.read(*frame_buffer))
+    while (!video_capture.read(frame->frame_buffer))
     {
       std::cout << "No frame.\n";
       cv::waitKey(25);
     }
 
-    // Enqueue the frame_buffer.
+    // Enqueue the frame.
     attempt(mq_send(
                 frame_pipeline->available_frame_queue,
-                (const char *)&frame_buffer,
-                sizeof(cv::Mat *),
+                (const char *)&frame,
+                sizeof(Frame *),
                 0),
             "mq_send() available_frame_queue");
   }
@@ -64,29 +64,29 @@ void capture_frame_teardown(FramePipeline *frame_pipeline)
  */
 void capture_frame(FramePipeline *frame_pipeline)
 {
-  // Dequeue the next available frame buffer.
-  cv::Mat *frame_buffer;
+  // Dequeue the next available frame.
+  Frame *frame;
   attempt(
       mq_receive(
           frame_pipeline->available_frame_queue,
-          (char *)&frame_buffer,
-          sizeof(cv::Mat *),
+          (char *)&frame,
+          sizeof(Frame *),
           NULL),
       "mq_receive() available_frame_queue");
 
   // Capture a frame.
-  if (!video_capture.read(*frame_buffer))
+  if (!video_capture.read(frame->frame_buffer))
   {
     std::cout << "No frame.\n";
     cv::waitKey(25);
   }
 
-  // Enqueue the captured frame buffer.
+  // Enqueue the captured frame.
   attempt(
       mq_send(
           frame_pipeline->captured_frame_queue,
-          (const char *)&frame_buffer,
-          sizeof(cv::Mat *),
+          (const char *)&frame,
+          sizeof(Frame *),
           0),
       "mq_send() captured_frame_queue");
 }

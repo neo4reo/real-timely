@@ -30,13 +30,13 @@ void select_frame_teardown(FramePipeline *frame_pipeline)
  */
 void select_frame(FramePipeline *frame_pipeline)
 {
-  // Dequeue the next differenced frame buffer.
-  cv::Mat *frame_buffer;
+  // Dequeue the next differenced frame.
+  Frame *frame;
   attempt(
       mq_receive(
           frame_pipeline->difference_frame_queue,
-          (char *)&frame_buffer,
-          sizeof(cv::Mat *),
+          (char *)&frame,
+          sizeof(Frame *),
           NULL),
       "mq_receive() difference_frame_queue");
 
@@ -46,8 +46,8 @@ void select_frame(FramePipeline *frame_pipeline)
   attempt(
       mq_send(
           frame_pipeline->selected_frame_queue,
-          (const char *)&frame_buffer,
-          sizeof(cv::Mat *),
+          (const char *)&frame,
+          sizeof(Frame *),
           0),
       "mq_send() selected_frame_queue");
 }

@@ -49,13 +49,13 @@ void write_frame_teardown(FramePipeline *frame_pipeline)
  */
 void write_frame(FramePipeline *frame_pipeline)
 {
-  // Dequeue the next selected frame buffer.
-  cv::Mat *frame_buffer;
+  // Dequeue the next selected frame.
+  Frame *frame;
   attempt(
       mq_receive(
           frame_pipeline->selected_frame_queue,
-          (char *)&frame_buffer,
-          sizeof(cv::Mat *),
+          (char *)&frame,
+          sizeof(Frame *),
           NULL),
       "mq_receive() selected_frame_queue");
 
@@ -65,17 +65,17 @@ void write_frame(FramePipeline *frame_pipeline)
   filename_number << std::right << std::setfill('0') << std::setw(6) << frame_number;
   cv::imwrite(
       static_cast<std::string>(OUTPUT_DIRECTORY) + "/" + filename_number.str() + FILENAME_EXTENSION,
-      *frame_buffer);
+      frame->frame_buffer);
 
   // Increment the frame number.
   ++frame_number;
 
-  // Enqueue the newly-available frame buffer.
+  // Enqueue the newly-available frame.
   attempt(
       mq_send(
           frame_pipeline->available_frame_queue,
-          (const char *)&frame_buffer,
-          sizeof(cv::Mat *),
+          (const char *)&frame,
+          sizeof(Frame *),
           0),
       "mq_send() available_frame_queue");
 }

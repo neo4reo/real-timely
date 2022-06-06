@@ -25,8 +25,8 @@
  */
 FramePipeline frame_pipeline = {
     .message_queue_attributes = {
-        .mq_maxmsg = NUMBER_OF_FRAME_BUFFERS,
-        .mq_msgsize = sizeof(cv::Mat *),
+        .mq_maxmsg = NUMBER_OF_FRAMES,
+        .mq_msgsize = sizeof(Frame *),
     }};
 
 /**
