@@ -33,15 +33,15 @@ FramePipeline frame_pipeline = {
  * @brief The service schedule.
  */
 Schedule schedule = {
-    .frequency = 20,
-    .maximum_iterations = 200,
+    .frequency = 3,
+    .maximum_iterations = 570,
     .iteration_counter = 0,
     .sequencer_cpu = 0,
     .services = {
         {
             .id = 1,
             .name = "Capture Frame",
-            .period = 10,
+            .period = 1,
             .cpu = 3,
             .exit_flag = FALSE,
             .frame_pipeline = &frame_pipeline,
@@ -52,7 +52,7 @@ Schedule schedule = {
         {
             .id = 2,
             .name = "Difference Frame",
-            .period = 10,
+            .period = 1,
             .cpu = 3,
             .exit_flag = FALSE,
             .frame_pipeline = &frame_pipeline,
@@ -63,7 +63,7 @@ Schedule schedule = {
         {
             .id = 3,
             .name = "Select Frame",
-            .period = 10,
+            .period = 1,
             .cpu = 3,
             .exit_flag = FALSE,
             .frame_pipeline = &frame_pipeline,
@@ -74,7 +74,7 @@ Schedule schedule = {
         {
             .id = 4,
             .name = "Write Frame",
-            .period = 10,
+            .period = 3,
             .cpu = 3,
             .exit_flag = FALSE,
             .frame_pipeline = &frame_pipeline,
@@ -116,10 +116,10 @@ void *ServiceThread(void *thread_parameters)
   Service *service = (Service *)thread_parameters;
 
   // Run the service's setup function.
-  write_log("Service: %i (%s) setup starting...", service->id, service->name);
+  write_log("Service: %i (%s) SETUP STARTING...", service->id, service->name);
   if (service->setup_function != 0)
     (service->setup_function)(service->frame_pipeline);
-  write_log("Service: %i (%s) setup complete", service->id, service->name);
+  write_log("Service: %i (%s) SETUP COMPLETE", service->id, service->name);
 
   // Allow sequencer to proceed.
   attempt(
@@ -139,6 +139,8 @@ void *ServiceThread(void *thread_parameters)
       if (service->teardown_function != 0)
         (service->teardown_function)(service->frame_pipeline);
 
+      write_log_with_timer("Service: %i, Service Name: %s, Request: %u, TERMINATING SERVICE", service->id, service->name, request_counter);
+
       // Terminate the thread.
       pthread_exit((void *)0);
     }
@@ -147,9 +149,9 @@ void *ServiceThread(void *thread_parameters)
     ++request_counter;
 
     // Perform the work.
-    write_log_with_timer("Service: %i, Service Name: %s, Request: %u, Begin", service->id, service->name, request_counter);
+    write_log_with_timer("Service: %i, Service Name: %s, Request: %u, BEGIN", service->id, service->name, request_counter);
     (service->service_function)(service->frame_pipeline);
-    write_log_with_timer("Service: %i, Service Name: %s, Request: %u, Done", service->id, service->name, request_counter);
+    write_log_with_timer("Service: %i, Service Name: %s, Request: %u, DONE", service->id, service->name, request_counter);
   }
 }
 
@@ -336,7 +338,7 @@ void start_all_service_threads(Schedule *schedule, FramePipeline *frame_pipeline
         service->priority_descending);
 
     // Start the service's thread.
-    write_log("Service: %i (%s) thread create starting...\n", service->id, service->name);
+    write_log("Service: %i (%s) THREAD CREATE STARTED...\n", service->id, service->name);
     errno = pthread_create(
         &service->thread_descriptor,
         &service->thread_attributes,
@@ -344,7 +346,7 @@ void start_all_service_threads(Schedule *schedule, FramePipeline *frame_pipeline
         service);
     if (errno)
       print_with_errno_and_exit("pthread_create()");
-    write_log("Service: %i (%s) thread create complete", service->id, service->name);
+    write_log("Service: %i (%s) THREAD CREATE COMPLETE", service->id, service->name);
   }
 
   // Wait for each service thread to finish setup.
@@ -352,7 +354,7 @@ void start_all_service_threads(Schedule *schedule, FramePipeline *frame_pipeline
   {
     Service *service = &schedule->services[index];
     attempt(sem_wait(&service->setup_semaphore), "sem_wait()");
-    write_log("Service: %i (%s) ready", service->id, service->name);
+    write_log("Service: %i (%s) READY", service->id, service->name);
   }
 }
 

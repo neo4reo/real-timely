@@ -13,6 +13,7 @@
 #include <opencv2/imgcodecs.hpp>
 #include <sstream>
 #include <string>
+#include <time.h>
 #include "../sequencer.h"
 #include "../utils/error.h"
 #include "../utils/log.h"
@@ -23,6 +24,11 @@
 
 unsigned int frame_number{0};
 std::ostringstream filename_number;
+
+const struct timespec dequeue_timeout = {
+    .tv_sec = 5,
+    .tv_nsec = 0,
+};
 
 /**
  * @brief TODO NICK: doc
@@ -51,31 +57,26 @@ void write_frame(FramePipeline *frame_pipeline)
 {
   // Dequeue the next selected frame.
   Frame *frame;
-  attempt(
-      mq_receive(
-          frame_pipeline->selected_frame_queue,
-          (char *)&frame,
-          sizeof(Frame *),
-          NULL),
-      "mq_receive() selected_frame_queue");
 
-  // Write the frame to disk.
-  filename_number.str("");
-  filename_number.clear();
-  filename_number << std::right << std::setfill('0') << std::setw(6) << frame_number;
-  cv::imwrite(
-      static_cast<std::string>(OUTPUT_DIRECTORY) + "/" + filename_number.str() + FILENAME_EXTENSION,
-      frame->frame_buffer);
+  // Deque and save all frames in the selected frames queue.
+  while (-1 != mq_timedreceive(
+                   frame_pipeline->selected_frame_queue,
+                   (char *)&frame,
+                   sizeof(Frame *),
+                   NULL,
+                   &dequeue_timeout))
+  {
+    write_log_with_timer("Write Frame - WRITING FRAME %u", frame_number);
 
-  // Increment the frame number.
-  ++frame_number;
+    // Write the frame to disk.
+    filename_number.str("");
+    filename_number.clear();
+    filename_number << std::right << std::setfill('0') << std::setw(6) << frame_number;
+    cv::imwrite(
+        static_cast<std::string>(OUTPUT_DIRECTORY) + "/" + filename_number.str() + FILENAME_EXTENSION,
+        frame->frame_buffer);
 
-  // Enqueue the newly-available frame.
-  attempt(
-      mq_send(
-          frame_pipeline->available_frame_queue,
-          (const char *)&frame,
-          sizeof(Frame *),
-          0),
-      "mq_send() available_frame_queue");
+    // Increment the frame number.
+    ++frame_number;
+  }
 }

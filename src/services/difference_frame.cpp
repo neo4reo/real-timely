@@ -7,6 +7,7 @@
 
 #include <mqueue.h>
 #include <opencv2/core.hpp>
+#include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 #include <unistd.h>
 #include "../sequencer.h"
@@ -14,6 +15,8 @@
 #include "../utils/log.h"
 #include "../utils/time.h"
 #include "difference_frame.h"
+
+#define DISPLAY_FRAMES FALSE
 
 cv::Mat *previous_frame_buffer;
 cv::Mat difference_frame_buffer;
@@ -81,6 +84,17 @@ void difference_frame(FramePipeline *frame_pipeline)
   cv::absdiff(*previous_frame_buffer, frame->frame_buffer, difference_frame_buffer);
   frame->difference_absolute = (unsigned int)cv::sum(difference_frame_buffer)[0];
   frame->difference_percentage = get_percentage(frame->difference_absolute, max_difference_absolute);
+
+  if (DISPLAY_FRAMES)
+  {
+    // Draw frames to the screen for debugging.
+    cv::putText(difference_frame_buffer, std::to_string(frame->difference_percentage), cvPoint(500, 30), cv::FONT_HERSHEY_COMPLEX_SMALL, 0.8, cvScalar(200, 200, 250), 1, CV_AA);
+    cv::imshow("Grayscale Frame", frame->frame_buffer);
+    cv::imshow("Difference Frame", difference_frame_buffer);
+    cvWaitKey(100);
+  }
+
+  write_log_with_timer("Difference Frame - Percentage: %f", frame->difference_percentage);
 
   // Update the previous frame buffer.
   previous_frame_buffer = &frame->frame_buffer;

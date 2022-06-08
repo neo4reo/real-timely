@@ -11,11 +11,20 @@
 #include "../utils/log.h"
 #include "select_frame.h"
 
+#define TICK_DETECTION_THRESHOLD_PERCENTAGE (0.45)
+
+double previous_difference_percentage{0};
+Frame *current_best_frame;
+
+unsigned int frame_count;
+
 /**
  * @brief TODO NICK: doc
  */
 void select_frame_setup(FramePipeline *frame_pipeline)
 {
+  // Initialize the current best frame.
+  current_best_frame = &frame_pipeline->frames[0];
 }
 
 /**
@@ -40,14 +49,49 @@ void select_frame(FramePipeline *frame_pipeline)
           NULL),
       "mq_receive() difference_frame_queue");
 
-  // TODO NICK: Implement
+  write_log_with_timer("Select Frame - Previous: %f, Current: %f", previous_difference_percentage, frame->difference_percentage);
 
-  // Enqueue the selected frame buffer.
+  if (
+      // This frame crosses above the threshold.
+      previous_difference_percentage < TICK_DETECTION_THRESHOLD_PERCENTAGE &&
+      frame->difference_percentage >= TICK_DETECTION_THRESHOLD_PERCENTAGE)
+  {
+    write_log_with_timer("Select Frame - TICK DETECTED, SAVING BEST FRAME", previous_difference_percentage, frame->difference_percentage);
+    // Enqueue the selected frame buffer.
+    attempt(
+        mq_send(
+            frame_pipeline->selected_frame_queue,
+            (const char *)&current_best_frame,
+            sizeof(Frame *),
+            0),
+        "mq_send() selected_frame_queue");
+  }
+  else if (
+      // This frame crosses below the threshold.
+      previous_difference_percentage >= TICK_DETECTION_THRESHOLD_PERCENTAGE &&
+      frame->difference_percentage < TICK_DETECTION_THRESHOLD_PERCENTAGE)
+  {
+    write_log_with_timer("Select Frame - STABILITY DETECTED, RESETTING BEST FRAME", previous_difference_percentage, frame->difference_percentage);
+
+    // Begin a new search for the best frame, staring with this one.
+    current_best_frame = frame;
+  }
+  else if (
+    // This frame is better than the current best frame.
+    frame->difference_percentage < current_best_frame->difference_percentage
+  )
+    // Make this frame the new best frame.
+    current_best_frame = frame;
+
+  // Enqueue the processed frame.
   attempt(
       mq_send(
-          frame_pipeline->selected_frame_queue,
+          frame_pipeline->available_frame_queue,
           (const char *)&frame,
           sizeof(Frame *),
           0),
-      "mq_send() selected_frame_queue");
+      "mq_send() available_frame_queue");
+
+  previous_difference_percentage = frame->difference_percentage;
+  ++frame_count;
 }
