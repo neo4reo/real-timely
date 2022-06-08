@@ -34,7 +34,7 @@ FramePipeline frame_pipeline = {
  */
 Schedule schedule = {
     .frequency = 3,
-    .maximum_iterations = 570,
+    .maximum_iterations = 60,
     .iteration_counter = 0,
     .sequencer_cpu = 0,
     .services = {
@@ -112,7 +112,7 @@ void assign_service_priorities(Schedule *schedule)
  */
 void *ServiceThread(void *thread_parameters)
 {
-  // // Unpack the thread parameters.
+  // Unpack the thread parameters.
   Service *service = (Service *)thread_parameters;
 
   // Run the service's setup function.
@@ -126,6 +126,7 @@ void *ServiceThread(void *thread_parameters)
       sem_post(&service->setup_semaphore),
       "sem_post()");
 
+  struct timespec request_start_time, request_complete_time;
   unsigned int request_counter = 0;
   while (TRUE)
   {
@@ -150,8 +151,15 @@ void *ServiceThread(void *thread_parameters)
 
     // Perform the work.
     write_log_with_timer("Service: %i, Service Name: %s, Request: %u, BEGIN", service->id, service->name, request_counter);
+    get_current_monotonic_raw_time(&request_start_time);
     (service->service_function)(service->frame_pipeline);
-    write_log_with_timer("Service: %i, Service Name: %s, Request: %u, DONE", service->id, service->name, request_counter);
+    get_current_monotonic_raw_time(&request_complete_time);
+    write_log_with_timer(
+        "Service: %i, Service Name: %s, Request: %u, DONE, Request Elapsed Time: %6.9lf",
+        service->id,
+        service->name,
+        request_counter,
+        get_elapsed_time_in_seconds(&request_start_time, &request_complete_time));
   }
 }
 
