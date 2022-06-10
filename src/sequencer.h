@@ -12,7 +12,7 @@
 #define LOG_PREFIX "[REAL TIMELY]"
 
 #define NUMBER_OF_SERVICES (4)
-#define NUMBER_OF_FRAMES (10)
+#define NUMBER_OF_FRAMES (100)
 
 #define AVAILABLE_FRAME_QUEUE_NAME "/available_frame_queue"
 #define CAPTURED_FRAME_QUEUE_NAME "/captured_frame_queue"

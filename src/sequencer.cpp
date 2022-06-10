@@ -33,8 +33,8 @@ FramePipeline frame_pipeline = {
  * @brief The service schedule.
  */
 Schedule schedule = {
-    .frequency = 3,
-    .maximum_iterations = 60,
+    .frequency = 30,
+    .maximum_iterations = 5600,
     .iteration_counter = 0,
     .sequencer_cpu = 0,
     .services = {
@@ -42,7 +42,7 @@ Schedule schedule = {
             .id = 1,
             .name = "Capture Frame",
             .period = 1,
-            .cpu = 3,
+            .cpu = 2,
             .exit_flag = FALSE,
             .frame_pipeline = &frame_pipeline,
             .setup_function = capture_frame_setup,
