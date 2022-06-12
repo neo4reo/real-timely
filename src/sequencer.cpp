@@ -460,7 +460,7 @@ void validate_current_thread_is_real_time()
 
 int main()
 {
-  reset_log(LOG_PREFIX);
+  reset_log();
 
   set_current_thread_to_real_time(schedule.sequencer_cpu);
   validate_current_thread_is_real_time();

@@ -67,6 +67,7 @@ void write_frame(FramePipeline *frame_pipeline)
                    &dequeue_timeout))
   {
     write_log_with_timer("Write Frame - WRITING FRAME %u", frame_number);
+    write_assignment_log_with_timer(frame_number);
 
     // Write the frame to disk.
     filename_number.str("");

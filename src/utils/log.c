@@ -23,14 +23,10 @@ void start_log_timer()
 /**
  * @brief Erase the syslog file and open a new log stream.
  */
-void reset_log(const char *log_prefix)
+void reset_log()
 {
-  static char command[100] = "";
-  strcat(command, "echo \"");
-  strcat(command, log_prefix);
-  strcat(command, " $(uname -a)\" | tee /var/log/syslog");
-  system(command);
-  openlog(log_prefix, LOG_NDELAY, LOG_DAEMON);
+  system("$(uname -a)\" | tee /var/log/syslog");
+  openlog("", LOG_NDELAY, LOG_DAEMON);
 }
 
 /**
@@ -86,4 +82,20 @@ void write_log_with_timer(const char *format, ...)
   va_start(arguments, format);
   vsyslog(LOG_INFO, message, arguments);
   va_end(arguments);
+}
+
+/**
+ * @brief Generate a log message, that conforms to the format prescribed by the
+ * course autograder, namely:
+ *
+ *    [Course #:4][Final Project][Frame Count: n] [Image Capture Start Time: X.Y seconds]
+ */
+void write_assignment_log_with_timer(unsigned int frame_number)
+{
+  // Get the elapsed log time.
+  get_current_monotonic_raw_time(&current_time);
+  double elapsed_time = get_elapsed_time_in_seconds(&start_time, &current_time);
+
+  // Log the message.
+  syslog(LOG_INFO, "[Final Project][Frame Count: %u] [Image Capture Start Time: %6.9lf]", frame_number, elapsed_time);
 }

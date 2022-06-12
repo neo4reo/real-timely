@@ -9,8 +9,6 @@
 #define TRUE (1)
 #define FALSE (0)
 
-#define LOG_PREFIX "[REAL TIMELY]"
-
 #define NUMBER_OF_SERVICES (4)
 #define NUMBER_OF_FRAMES (100)
 
