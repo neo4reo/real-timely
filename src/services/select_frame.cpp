@@ -47,7 +47,7 @@ void select_frame(FramePipeline *frame_pipeline)
           (char *)&frame,
           sizeof(Frame *),
           NULL),
-      "mq_receive() difference_frame_queue");
+      "mq_receive() difference_frame_queue in select_frame");
 
   write_log_with_timer("Select Frame - Previous: %f, Current: %f", previous_difference_percentage, frame->difference_percentage);
 
@@ -64,7 +64,7 @@ void select_frame(FramePipeline *frame_pipeline)
             (const char *)&current_best_frame,
             sizeof(Frame *),
             0),
-        "mq_send() selected_frame_queue");
+        "mq_send() selected_frame_queue in select_frame");
   }
   else if (
       // This frame crosses below the threshold.
@@ -90,7 +90,7 @@ void select_frame(FramePipeline *frame_pipeline)
           (const char *)&frame,
           sizeof(Frame *),
           0),
-      "mq_send() available_frame_queue");
+      "mq_send() available_frame_queue in select_frame");
 
   previous_difference_percentage = frame->difference_percentage;
   ++frame_count;

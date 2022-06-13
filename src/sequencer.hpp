@@ -10,7 +10,6 @@
 #define FALSE (0)
 
 #define NUMBER_OF_SERVICES (4)
-#define NUMBER_OF_FRAMES (100)
 
 #define AVAILABLE_FRAME_QUEUE_NAME "/available_frame_queue"
 #define CAPTURED_FRAME_QUEUE_NAME "/captured_frame_queue"
@@ -33,7 +32,8 @@ typedef struct Frame
  */
 typedef struct FramePipeline
 {
-  Frame frames[NUMBER_OF_FRAMES];
+  unsigned int number_of_frames;
+  Frame *frames;
   mqd_t available_frame_queue;
   mqd_t captured_frame_queue;
   mqd_t difference_frame_queue;

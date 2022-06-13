@@ -67,7 +67,7 @@ void difference_frame(FramePipeline *frame_pipeline)
           (char *)&frame,
           sizeof(Frame *),
           NULL),
-      "mq_receive() captured_frame_queue");
+      "mq_receive() captured_frame_queue in difference_frame");
 
   // If this is the very first frame, initialize the previous frame buffer
   // with this same frame.
@@ -106,5 +106,5 @@ void difference_frame(FramePipeline *frame_pipeline)
           (const char *)&frame,
           sizeof(Frame *),
           0),
-      "mq_send() difference_frame_queue");
+      "mq_send() difference_frame_queue in difference_frame");
 }

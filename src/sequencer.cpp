@@ -11,6 +11,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "schedules/schedule_1_hz.hpp"
 #include "services/capture_frame.h"
 #include "services/difference_frame.h"
 #include "services/select_frame.h"
@@ -20,69 +21,8 @@
 #include "utils/log.h"
 #include "utils/time.h"
 
-/**
- * @brief The frame pipeline resources.
- */
-FramePipeline frame_pipeline = {
-    .message_queue_attributes = {
-        .mq_maxmsg = NUMBER_OF_FRAMES,
-        .mq_msgsize = sizeof(Frame *),
-    }};
-
-/**
- * @brief The service schedule.
- */
-Schedule schedule = {
-    .frequency = 30,
-    .maximum_iterations = 5600,
-    .iteration_counter = 0,
-    .sequencer_cpu = 0,
-    .services = {
-        {
-            .id = 1,
-            .name = "Capture Frame",
-            .period = 1,
-            .cpu = 2,
-            .exit_flag = FALSE,
-            .frame_pipeline = &frame_pipeline,
-            .setup_function = capture_frame_setup,
-            .service_function = capture_frame,
-            .teardown_function = capture_frame_teardown,
-        },
-        {
-            .id = 2,
-            .name = "Difference Frame",
-            .period = 1,
-            .cpu = 3,
-            .exit_flag = FALSE,
-            .frame_pipeline = &frame_pipeline,
-            .setup_function = difference_frame_setup,
-            .service_function = difference_frame,
-            .teardown_function = difference_frame_teardown,
-        },
-        {
-            .id = 3,
-            .name = "Select Frame",
-            .period = 1,
-            .cpu = 3,
-            .exit_flag = FALSE,
-            .frame_pipeline = &frame_pipeline,
-            .setup_function = select_frame_setup,
-            .service_function = select_frame,
-            .teardown_function = select_frame_teardown,
-        },
-        {
-            .id = 4,
-            .name = "Write Frame",
-            .period = 3,
-            .cpu = 3,
-            .exit_flag = FALSE,
-            .frame_pipeline = &frame_pipeline,
-            .setup_function = write_frame_setup,
-            .service_function = write_frame,
-            .teardown_function = write_frame_teardown,
-        },
-    }};
+FramePipeline *frame_pipeline = &frame_pipeline_1_hz;
+Schedule *schedule = &schedule_1_hz;
 
 /**
  * @brief Compare two services' periods for sorting priority.
@@ -196,21 +136,21 @@ void terminate_all_service_threads(Schedule *schedule)
  */
 void Sequencer(int signal_number)
 {
-  write_log_with_timer("Sequencer: %llu", schedule.iteration_counter);
+  write_log_with_timer("Sequencer: %llu", schedule->iteration_counter);
 
   // Release all the services that are scheduled for this time unit.
   for (int index = 0; index < NUMBER_OF_SERVICES; ++index)
   {
-    Service *service = &schedule.services[index];
-    if ((schedule.iteration_counter % service->period) == 0)
+    Service *service = &schedule->services[index];
+    if ((schedule->iteration_counter % service->period) == 0)
       attempt(sem_post(&service->semaphore), "sem_post()");
   }
 
   // Increment the sequence counter.
-  ++schedule.iteration_counter;
+  ++schedule->iteration_counter;
 
-  if (schedule.iteration_counter >= schedule.maximum_iterations)
-    terminate_all_service_threads(&schedule);
+  if (schedule->iteration_counter >= schedule->maximum_iterations)
+    terminate_all_service_threads(schedule);
 }
 
 /**
@@ -265,7 +205,7 @@ void initialize_frame_pipeline(FramePipeline *frame_pipeline)
                                                   S_IRWXU,
                                                   &frame_pipeline->message_queue_attributes);
   if (frame_pipeline->available_frame_queue == -1)
-    print_with_errno_and_exit("mq_open() available_frame_queue");
+    print_with_errno_and_exit("mq_open() failed opening available_frame_queue");
 
   // Initialize the captured frame queue
   mq_unlink(CAPTURED_FRAME_QUEUE_NAME);
@@ -274,7 +214,7 @@ void initialize_frame_pipeline(FramePipeline *frame_pipeline)
                                                  S_IRWXU,
                                                  &frame_pipeline->message_queue_attributes);
   if (frame_pipeline->captured_frame_queue == -1)
-    print_with_errno_and_exit("mq_open() captured_frame_queue");
+    print_with_errno_and_exit("mq_open() failed opening captured_frame_queue");
 
   // Initialize the difference frame queue
   mq_unlink(DIFFERENCE_FRAME_QUEUE_NAME);
@@ -283,7 +223,7 @@ void initialize_frame_pipeline(FramePipeline *frame_pipeline)
                                                    S_IRWXU,
                                                    &frame_pipeline->message_queue_attributes);
   if (frame_pipeline->difference_frame_queue == -1)
-    print_with_errno_and_exit("mq_open() difference_frame_queue");
+    print_with_errno_and_exit("mq_open() failed opening difference_frame_queue");
 
   // Initialize the selected frame queue
   mq_unlink(SELECTED_FRAME_QUEUE_NAME);
@@ -292,7 +232,7 @@ void initialize_frame_pipeline(FramePipeline *frame_pipeline)
                                                  S_IRWXU,
                                                  &frame_pipeline->message_queue_attributes);
   if (frame_pipeline->selected_frame_queue == -1)
-    print_with_errno_and_exit("mq_open() selected_frame_queue");
+    print_with_errno_and_exit("mq_open() failed opening selected_frame_queue");
 }
 
 /**
@@ -462,14 +402,14 @@ int main()
 {
   reset_log();
 
-  set_current_thread_to_real_time(schedule.sequencer_cpu);
+  set_current_thread_to_real_time(schedule->sequencer_cpu);
   validate_current_thread_is_real_time();
-  initialize_frame_pipeline(&frame_pipeline);
+  initialize_frame_pipeline(frame_pipeline);
 
-  assign_service_priorities(&schedule);
-  start_all_service_threads(&schedule, &frame_pipeline);
-  begin_sequencing(&schedule);
+  assign_service_priorities(schedule);
+  start_all_service_threads(schedule, frame_pipeline);
+  begin_sequencing(schedule);
 
-  join_all_service_threads(&schedule);
-  uninitialize_frame_pipeline(&frame_pipeline);
+  join_all_service_threads(schedule);
+  uninitialize_frame_pipeline(frame_pipeline);
 }
