@@ -15,7 +15,7 @@
 #include "services/difference_frame.h"
 #include "services/select_frame.h"
 #include "services/write_frame.h"
-#include "sequencer.h"
+#include "sequencer.hpp"
 #include "utils/error.h"
 #include "utils/log.h"
 #include "utils/time.h"

@@ -6,7 +6,7 @@
  */
 
 #include <mqueue.h>
-#include "../sequencer.h"
+#include "../sequencer.hpp"
 #include "../utils/error.h"
 #include "../utils/log.h"
 #include "select_frame.h"

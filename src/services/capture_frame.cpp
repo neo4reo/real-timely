@@ -11,7 +11,7 @@
 #include <opencv2/imgproc.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/videoio.hpp>
-#include "../sequencer.h"
+#include "../sequencer.hpp"
 #include "../utils/error.h"
 #include "../utils/log.h"
 #include "capture_frame.h"

@@ -14,7 +14,7 @@
 #include <sstream>
 #include <string>
 #include <time.h>
-#include "../sequencer.h"
+#include "../sequencer.hpp"
 #include "../utils/error.h"
 #include "../utils/log.h"
 #include "write_frame.h"

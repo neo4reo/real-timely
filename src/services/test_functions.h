@@ -1,7 +1,7 @@
 #ifndef TEST_FUNCTIONS_H
 #define TEST_FUNCTIONS_H
 
-#include "../sequencer.h"
+#include "../sequencer.hpp"
 
 void print_beans_setup(FramePipeline *frame_pipeline);
 void print_beans_teardown(FramePipeline *frame_pipeline);

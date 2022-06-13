@@ -10,7 +10,7 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 #include <unistd.h>
-#include "../sequencer.h"
+#include "../sequencer.hpp"
 #include "../utils/error.h"
 #include "../utils/log.h"
 #include "../utils/time.h"
