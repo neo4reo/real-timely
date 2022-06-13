@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "schedules/schedule_1_hz.hpp"
+#include "schedules/schedule_10_hz.hpp"
 #include "services/capture_frame.h"
 #include "services/difference_frame.h"
 #include "services/select_frame.h"
@@ -21,8 +22,13 @@
 #include "utils/log.h"
 #include "utils/time.h"
 
-FramePipeline *frame_pipeline = &frame_pipeline_1_hz;
-Schedule *schedule = &schedule_1_hz;
+// // 1 Hz Solution
+// FramePipeline *frame_pipeline = &frame_pipeline_1_hz;
+// Schedule *schedule = &schedule_1_hz;
+
+// 10 Hz Solution
+FramePipeline *frame_pipeline = &frame_pipeline_10_hz;
+Schedule *schedule = &schedule_10_hz;
 
 /**
  * @brief Compare two services' periods for sorting priority.
