@@ -25,7 +25,7 @@ void start_log_timer()
  */
 void reset_log()
 {
-  system("$(uname -a)\" | tee /var/log/syslog");
+  system("echo \"$(uname -a)\" | tee /var/log/syslog");
   openlog("", LOG_NDELAY, LOG_DAEMON);
 }
 
