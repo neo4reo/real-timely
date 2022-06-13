@@ -97,5 +97,5 @@ void write_assignment_log_with_timer(unsigned int frame_number)
   double elapsed_time = get_elapsed_time_in_seconds(&start_time, &current_time);
 
   // Log the message.
-  syslog(LOG_INFO, "[Final Project][Frame Count: %u] [Image Capture Start Time: %6.9lf]", frame_number, elapsed_time);
+  syslog(LOG_INFO, "[COURSE #:4][Final Project][Frame Count: %u] [Image Capture Start Time: %6.9lf]", frame_number, elapsed_time);
 }
