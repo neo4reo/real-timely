@@ -12,10 +12,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "schedules/schedule_1_hz.hpp"
+#include "schedules/schedule_1_hz_plus_blur.hpp"
 #include "schedules/schedule_10_hz.hpp"
 #include "services/capture_frame.h"
 #include "services/difference_frame.h"
 #include "services/select_frame.h"
+#include "services/blur_frame.h"
 #include "services/write_frame.h"
 #include "sequencer.hpp"
 #include "utils/error.h"
@@ -26,9 +28,13 @@
 // FramePipeline *frame_pipeline = &frame_pipeline_1_hz;
 // Schedule *schedule = &schedule_1_hz;
 
-// 10 Hz Solution
-FramePipeline *frame_pipeline = &frame_pipeline_10_hz;
-Schedule *schedule = &schedule_10_hz;
+// 1 Hz Plus Blur Solution
+FramePipeline *frame_pipeline = &frame_pipeline_1_hz_plus_blur;
+Schedule *schedule = &schedule_1_hz_plus_blur;
+
+// // 10 Hz Solution
+// FramePipeline *frame_pipeline = &frame_pipeline_10_hz;
+// Schedule *schedule = &schedule_10_hz;
 
 /**
  * @brief Compare two services' periods for sorting priority.
@@ -239,6 +245,15 @@ void initialize_frame_pipeline(FramePipeline *frame_pipeline)
                                                  &frame_pipeline->message_queue_attributes);
   if (frame_pipeline->selected_frame_queue == -1)
     print_with_errno_and_exit("mq_open() failed opening selected_frame_queue");
+
+  // Initialize the blurred frame queue
+  mq_unlink(BLURRED_FRAME_QUEUE_NAME);
+  frame_pipeline->blurred_frame_queue = mq_open(BLURRED_FRAME_QUEUE_NAME,
+                                                O_CREAT | O_RDWR,
+                                                S_IRWXU,
+                                                &frame_pipeline->message_queue_attributes);
+  if (frame_pipeline->blurred_frame_queue == -1)
+    print_with_errno_and_exit("mq_open() failed opening blurred_frame_queue");
 }
 
 /**
@@ -261,6 +276,10 @@ void uninitialize_frame_pipeline(FramePipeline *frame_pipeline)
   // Close the selected message queue.
   attempt(mq_close(frame_pipeline->selected_frame_queue), "mq_close() selected_frame_queue");
   mq_unlink(SELECTED_FRAME_QUEUE_NAME);
+
+  // Close the blurred message queue.
+  attempt(mq_close(frame_pipeline->blurred_frame_queue), "mq_close() blurred_frame_queue");
+  mq_unlink(BLURRED_FRAME_QUEUE_NAME);
 }
 
 /**

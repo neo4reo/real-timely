@@ -9,12 +9,13 @@
 #define TRUE (1)
 #define FALSE (0)
 
-#define NUMBER_OF_SERVICES (4)
+#define NUMBER_OF_SERVICES (5)
 
 #define AVAILABLE_FRAME_QUEUE_NAME "/available_frame_queue"
 #define CAPTURED_FRAME_QUEUE_NAME "/captured_frame_queue"
 #define DIFFERENCE_FRAME_QUEUE_NAME "/difference_frame_queue"
 #define SELECTED_FRAME_QUEUE_NAME "/selected_frame_queue"
+#define BLURRED_FRAME_QUEUE_NAME "/blurred_frame_queue"
 
 /**
  * @brief A structure containing a frame buffer and associated metadata.
@@ -38,6 +39,7 @@ typedef struct FramePipeline
   mqd_t captured_frame_queue;
   mqd_t difference_frame_queue;
   mqd_t selected_frame_queue;
+  mqd_t blurred_frame_queue;
   struct mq_attr message_queue_attributes;
 } FramePipeline;
 
