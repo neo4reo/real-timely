@@ -14,6 +14,7 @@
 #include "../sequencer.hpp"
 #include "../utils/error.h"
 #include "../utils/log.h"
+#include "../utils/time.h"
 #include "capture_frame.h"
 
 cv::VideoCapture video_capture;
@@ -64,7 +65,7 @@ void capture_frame_teardown(FramePipeline *frame_pipeline)
  * @brief Copies one frame from the camera into the next availablle frame
  * buffer.
  */
-void capture_frame(FramePipeline *frame_pipeline)
+void capture_frame(FramePipeline *frame_pipeline, Service *service, unsigned int request_counter)
 {
   // Dequeue the next available frame.
   Frame *frame;
@@ -76,12 +77,25 @@ void capture_frame(FramePipeline *frame_pipeline)
           NULL),
       "mq_receive() available_frame_queue in capture_frame");
 
+  // Start request timer.
+  write_log_with_timer("Service: %i, Service Name: %s, Request: %u, BEGIN", service->id, service->name, request_counter);
+  get_current_monotonic_raw_time(&service->work_start_time);
+
   // Capture a frame.
   if (!video_capture.read(frame->frame_buffer))
   {
     std::cout << "No frame.\n";
     cv::waitKey(25);
   }
+
+  // End request timer.
+  get_current_monotonic_raw_time(&service->work_complete_time);
+  write_log_with_timer(
+      "Service: %i, Service Name: %s, Request: %u, DONE, Request Elapsed Time: %6.9lf",
+      service->id,
+      service->name,
+      request_counter,
+      get_elapsed_time_in_seconds(&service->work_start_time, &service->work_complete_time));
 
   // Enqueue the captured frame.
   attempt(
