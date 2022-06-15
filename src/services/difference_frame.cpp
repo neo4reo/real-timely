@@ -71,6 +71,10 @@ void difference_frame(FramePipeline *frame_pipeline, Service *service, unsigned 
           NULL),
       "mq_receive() captured_frame_queue in difference_frame");
 
+  // Start request timer.
+  write_log_with_timer("Service: %i, Service Name: %s, Request: %u, BEGIN", service->id, service->name, request_counter);
+  get_current_monotonic_raw_time(&service->work_start_time);
+
   // If this is the very first frame, initialize the previous frame buffer
   // with this same frame.
   if (!is_initialized)
@@ -100,6 +104,15 @@ void difference_frame(FramePipeline *frame_pipeline, Service *service, unsigned 
 
   // Update the previous frame buffer.
   previous_frame_buffer = &frame->frame_buffer;
+
+  // End request timer.
+  get_current_monotonic_raw_time(&service->work_complete_time);
+  write_log_with_timer(
+      "Service: %i, Service Name: %s, Request: %u, DONE, Request Elapsed Time: %6.9lf",
+      service->id,
+      service->name,
+      request_counter,
+      get_elapsed_time_in_seconds(&service->work_start_time, &service->work_complete_time));
 
   // Enqueue the difference frame.
   attempt(

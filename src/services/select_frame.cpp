@@ -9,6 +9,7 @@
 #include "../sequencer.hpp"
 #include "../utils/error.h"
 #include "../utils/log.h"
+#include "../utils/time.h"
 #include "select_frame.h"
 
 #define TICK_DETECTION_THRESHOLD_PERCENTAGE (0.45)
@@ -55,6 +56,10 @@ void select_frame(FramePipeline *frame_pipeline, Service *service, unsigned int 
           NULL),
       "mq_receive() difference_frame_queue in select_frame");
 
+  // Start request timer.
+  write_log_with_timer("Service: %i, Service Name: %s, Request: %u, BEGIN", service->id, service->name, request_counter);
+  get_current_monotonic_raw_time(&service->work_start_time);
+
   write_log_with_timer("Select Frame - Previous: %f, Current: %f", previous_difference_percentage, frame->difference_percentage);
 
   if (
@@ -83,11 +88,19 @@ void select_frame(FramePipeline *frame_pipeline, Service *service, unsigned int 
     current_best_frame = frame;
   }
   else if (
-    // This frame is better than the current best frame.
-    frame->difference_percentage < current_best_frame->difference_percentage
-  )
+      // This frame is better than the current best frame.
+      frame->difference_percentage < current_best_frame->difference_percentage)
     // Make this frame the new best frame.
     current_best_frame = frame;
+
+  // End request timer.
+  get_current_monotonic_raw_time(&service->work_complete_time);
+  write_log_with_timer(
+      "Service: %i, Service Name: %s, Request: %u, DONE, Request Elapsed Time: %6.9lf",
+      service->id,
+      service->name,
+      request_counter,
+      get_elapsed_time_in_seconds(&service->work_start_time, &service->work_complete_time));
 
   // Enqueue the processed frame.
   attempt(

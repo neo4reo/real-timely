@@ -5,6 +5,7 @@
 #include <opencv2/videoio.hpp>
 #include <pthread.h>
 #include <semaphore.h>
+#include <time.h>
 
 #define TRUE (1)
 #define FALSE (0)
@@ -61,6 +62,8 @@ typedef struct Service
   pthread_t thread_descriptor;
   pthread_attr_t thread_attributes;
   struct sched_param schedule_parameters;
+  struct timespec work_start_time;
+  struct timespec work_complete_time;
 } Service;
 
 /**
