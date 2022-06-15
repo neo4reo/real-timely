@@ -29,7 +29,7 @@ void capture_frame_setup(FramePipeline *frame_pipeline)
     print_error_and_exit("Error at `video_capture.open()`\n");
 
   // Warm up each frame buffer.
-  for (int index = 0; index < frame_pipeline->number_of_frames; ++index)
+  for (int index = 0; index < NUMBER_OF_FRAMES; ++index)
   {
     Frame *frame = &frame_pipeline->frames[index];
 
