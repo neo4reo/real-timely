@@ -59,7 +59,7 @@ void difference_frame_teardown(FramePipeline *frame_pipeline)
  * @brief Compares the next captured frame to the previous one and measures
  * their absolute and relative differences.
  */
-void difference_frame(FramePipeline *frame_pipeline)
+void difference_frame(FramePipeline *frame_pipeline, Service *service)
 {
   // Dequeue the next captured frame.
   Frame *frame;

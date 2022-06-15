@@ -5,6 +5,6 @@
 
 void difference_frame_setup(FramePipeline *frame_pipeline);
 void difference_frame_teardown(FramePipeline *frame_pipeline);
-void difference_frame(FramePipeline *frame_pipeline);
+void difference_frame(FramePipeline *frame_pipeline, Service *service);;
 
 #endif

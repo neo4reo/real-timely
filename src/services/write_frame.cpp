@@ -53,7 +53,7 @@ void write_frame_teardown(FramePipeline *frame_pipeline)
 /**
  * @brief Write to disk all frames currently enqueued for writing.
  */
-void write_frame(FramePipeline *frame_pipeline)
+void write_frame(FramePipeline *frame_pipeline, Service *service)
 {
   // Dequeue the next selected frame.
   Frame *frame;

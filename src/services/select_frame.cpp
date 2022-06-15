@@ -43,7 +43,7 @@ void select_frame_teardown(FramePipeline *frame_pipeline)
  * added to the que for writing to disk. The stable is reset the next time the
  * relative difference falls back below the threshold.
  */
-void select_frame(FramePipeline *frame_pipeline)
+void select_frame(FramePipeline *frame_pipeline, Service *service)
 {
   // Dequeue the next differenced frame.
   Frame *frame;

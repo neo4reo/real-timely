@@ -53,7 +53,7 @@ typedef struct Service
   int exit_flag;
   FramePipeline *frame_pipeline;
   void (*setup_function)(FramePipeline *);
-  void (*service_function)(FramePipeline *);
+  void (*service_function)(FramePipeline *, Service *);
   void (*teardown_function)(FramePipeline *);
   int priority_descending;
   sem_t setup_semaphore;

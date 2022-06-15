@@ -152,7 +152,7 @@ void *ServiceThread(void *thread_parameters)
     // Perform the work.
     write_log_with_timer("Service: %i, Service Name: %s, Request: %u, BEGIN", service->id, service->name, request_counter);
     get_current_monotonic_raw_time(&request_start_time);
-    (service->service_function)(service->frame_pipeline);
+    (service->service_function)(service->frame_pipeline, service);
     get_current_monotonic_raw_time(&request_complete_time);
     write_log_with_timer(
         "Service: %i, Service Name: %s, Request: %u, DONE, Request Elapsed Time: %6.9lf",
