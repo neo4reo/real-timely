@@ -17,6 +17,7 @@
 #include "../sequencer.hpp"
 #include "../utils/error.h"
 #include "../utils/log.h"
+#include "../utils/time.h"
 #include "write_frame.h"
 
 #define OUTPUT_DIRECTORY "output"
@@ -53,7 +54,7 @@ void write_frame_teardown(FramePipeline *frame_pipeline)
 /**
  * @brief Write to disk all frames currently enqueued for writing.
  */
-void write_frame(FramePipeline *frame_pipeline)
+void write_frame(FramePipeline *frame_pipeline, Service *service, unsigned int request_counter)
 {
   // Dequeue the next selected frame.
   Frame *frame;
@@ -66,6 +67,10 @@ void write_frame(FramePipeline *frame_pipeline)
                    NULL,
                    &dequeue_timeout))
   {
+    // Start write timer.
+    write_log_with_timer("Service: %i, Service Name: %s, Frame Number: %u, BEGIN WRITE", service->id, service->name, frame_number);
+    get_current_monotonic_raw_time(&service->work_start_time);
+
     write_log_with_timer("Write Frame - WRITING FRAME %u", frame_number);
     write_assignment_log_with_timer(frame_number);
 
@@ -76,6 +81,15 @@ void write_frame(FramePipeline *frame_pipeline)
     cv::imwrite(
         static_cast<std::string>(OUTPUT_DIRECTORY) + "/" + filename_number.str() + FILENAME_EXTENSION,
         frame->frame_buffer);
+
+    // End write timer.
+    get_current_monotonic_raw_time(&service->work_complete_time);
+    write_log_with_timer(
+        "Service: %i, Service Name: %s, Frame Number: %u, END WRITE, Request Elapsed Time: %6.9lf",
+        service->id,
+        service->name,
+        frame_number,
+        get_elapsed_time_in_seconds(&service->work_start_time, &service->work_complete_time));
 
     // Increment the frame number.
     ++frame_number;
