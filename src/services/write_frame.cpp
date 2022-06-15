@@ -31,7 +31,7 @@ const struct timespec dequeue_timeout = {
 };
 
 /**
- * @brief TODO NICK: doc
+ * @brief Delete old results from the output directory.
  */
 void write_frame_setup(FramePipeline *frame_pipeline)
 {
@@ -44,14 +44,14 @@ void write_frame_setup(FramePipeline *frame_pipeline)
 }
 
 /**
- * @brief TODO NICK: doc
+ * @brief Does nothing.
  */
 void write_frame_teardown(FramePipeline *frame_pipeline)
 {
 }
 
 /**
- * @brief TODO NICK: doc
+ * @brief Write to disk all frames currently enqueued for writing.
  */
 void write_frame(FramePipeline *frame_pipeline)
 {

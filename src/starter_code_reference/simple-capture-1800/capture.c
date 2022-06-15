@@ -339,7 +339,6 @@ static void initialize_mmap(void)
     print_error_and_exit("Out of memory\n");
 
   // Initialize each allocated device buffer.
-  // TODO NICK: Original code seemed to leave `number_of_device_buffers` at one too many. Check if this is an issue.
   for (unsigned int device_buffer_index = 0; device_buffer_index < number_of_device_buffers; ++device_buffer_index)
   {
     struct v4l2_buffer v4l2_buffer_descriptor;

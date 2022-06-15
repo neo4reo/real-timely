@@ -33,7 +33,8 @@ double get_percentage(unsigned int value, unsigned int max_value)
 }
 
 /**
- * @brief TODO NICK: doc
+ * @brief Initialize frame measurements required to calculate difference
+ * percentages.
  */
 void difference_frame_setup(FramePipeline *frame_pipeline)
 {
@@ -48,14 +49,15 @@ void difference_frame_setup(FramePipeline *frame_pipeline)
 }
 
 /**
- * @brief TODO NICK: doc
+ * @brief Does nothing.
  */
 void difference_frame_teardown(FramePipeline *frame_pipeline)
 {
 }
 
 /**
- * @brief TODO NICK: doc
+ * @brief Compares the next captured frame to the previous one and measures
+ * their absolute and relative differences.
  */
 void difference_frame(FramePipeline *frame_pipeline)
 {

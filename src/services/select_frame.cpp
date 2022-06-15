@@ -19,7 +19,7 @@ Frame *current_best_frame;
 unsigned int frame_count;
 
 /**
- * @brief TODO NICK: doc
+ * @brief Initializes values used by the selection algorithm.
  */
 void select_frame_setup(FramePipeline *frame_pipeline)
 {
@@ -28,14 +28,20 @@ void select_frame_setup(FramePipeline *frame_pipeline)
 }
 
 /**
- * @brief TODO NICK: doc
+ * @brief Does nothing.
  */
 void select_frame_teardown(FramePipeline *frame_pipeline)
 {
 }
 
 /**
- * @brief TODO NICK: doc
+ * @brief Inspects the next incoming frame for a tick event, and maintains a
+ * reference to the most stable frame since the most recent tick event.
+ *
+ * When a tick event is detected, determined by the relative difference from
+ * the previous frame crossing above a certain threshold, the stable frame is
+ * added to the que for writing to disk. The stable is reset the next time the
+ * relative difference falls back below the threshold.
  */
 void select_frame(FramePipeline *frame_pipeline)
 {

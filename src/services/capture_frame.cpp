@@ -19,7 +19,8 @@
 cv::VideoCapture video_capture;
 
 /**
- * @brief TODO NICK: doc
+ * @brief Starts up the camera, warms up the frame buffers in memory, and
+ * initalizes the queue of frames available for writing to.
  */
 void capture_frame_setup(FramePipeline *frame_pipeline)
 {
@@ -51,7 +52,7 @@ void capture_frame_setup(FramePipeline *frame_pipeline)
 }
 
 /**
- * @brief TODO NICK: doc
+ * @brief Shuts down the camera.
  */
 void capture_frame_teardown(FramePipeline *frame_pipeline)
 {
@@ -60,7 +61,8 @@ void capture_frame_teardown(FramePipeline *frame_pipeline)
 }
 
 /**
- * @brief TODO NICK: doc
+ * @brief Copies one frame from the camera into the next availablle frame
+ * buffer.
  */
 void capture_frame(FramePipeline *frame_pipeline)
 {
