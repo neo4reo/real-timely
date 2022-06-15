@@ -5,6 +5,6 @@
 
 void blur_frame_setup(FramePipeline *frame_pipeline);
 void blur_frame_teardown(FramePipeline *frame_pipeline);
-void blur_frame(FramePipeline *frame_pipeline);
+void blur_frame(FramePipeline *frame_pipeline, Service *service, unsigned int request_counter);
 
 #endif

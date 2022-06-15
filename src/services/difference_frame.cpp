@@ -59,7 +59,7 @@ void difference_frame_teardown(FramePipeline *frame_pipeline)
  * @brief Compares the next captured frame to the previous one and measures
  * their absolute and relative differences.
  */
-void difference_frame(FramePipeline *frame_pipeline)
+void difference_frame(FramePipeline *frame_pipeline, Service *service, unsigned int request_counter)
 {
   // Dequeue the next captured frame.
   Frame *frame;
@@ -70,6 +70,10 @@ void difference_frame(FramePipeline *frame_pipeline)
           sizeof(Frame *),
           NULL),
       "mq_receive() captured_frame_queue in difference_frame");
+
+  // Start request timer.
+  write_log_with_timer("Service: %i, Service Name: %s, Request: %u, BEGIN", service->id, service->name, request_counter);
+  get_current_monotonic_raw_time(&service->work_start_time);
 
   // If this is the very first frame, initialize the previous frame buffer
   // with this same frame.
@@ -100,6 +104,15 @@ void difference_frame(FramePipeline *frame_pipeline)
 
   // Update the previous frame buffer.
   previous_frame_buffer = &frame->frame_buffer;
+
+  // End request timer.
+  get_current_monotonic_raw_time(&service->work_complete_time);
+  write_log_with_timer(
+      "Service: %i, Service Name: %s, Request: %u, DONE, Request Elapsed Time: %6.9lf",
+      service->id,
+      service->name,
+      request_counter,
+      get_elapsed_time_in_seconds(&service->work_start_time, &service->work_complete_time));
 
   // Enqueue the difference frame.
   attempt(
