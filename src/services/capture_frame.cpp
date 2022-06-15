@@ -64,7 +64,7 @@ void capture_frame_teardown(FramePipeline *frame_pipeline)
  * @brief Copies one frame from the camera into the next availablle frame
  * buffer.
  */
-void capture_frame(FramePipeline *frame_pipeline, Service *service)
+void capture_frame(FramePipeline *frame_pipeline, Service *service, unsigned int request_counter)
 {
   // Dequeue the next available frame.
   Frame *frame;
