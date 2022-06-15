@@ -33,8 +33,8 @@ FramePipeline frame_pipeline = {
  * @brief The service schedule.
  */
 Schedule schedule = {
-    .frequency = 3,
-    .maximum_iterations = 5600,
+    .frequency = 30,
+    .maximum_iterations = 9000,
     .iteration_counter = 0,
     .sequencer_cpu = 0,
     .services = {
