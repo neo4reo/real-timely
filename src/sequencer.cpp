@@ -138,7 +138,6 @@ void *ServiceThread(void *thread_parameters)
       sem_post(&service->setup_semaphore),
       "sem_post()");
 
-  struct timespec request_start_time, request_complete_time;
   unsigned int request_counter = 0;
   while (TRUE)
   {
@@ -158,20 +157,11 @@ void *ServiceThread(void *thread_parameters)
       pthread_exit((void *)0);
     }
 
+    // Perform the work.
+    (service->service_function)(service->frame_pipeline, service, request_counter);
+
     // Begin new service request by incrementing the counter.
     ++request_counter;
-
-    // Perform the work.
-    write_log_with_timer("Service: %i, Service Name: %s, Request: %u, BEGIN", service->id, service->name, request_counter);
-    get_current_monotonic_raw_time(&request_start_time);
-    (service->service_function)(service->frame_pipeline);
-    get_current_monotonic_raw_time(&request_complete_time);
-    write_log_with_timer(
-        "Service: %i, Service Name: %s, Request: %u, DONE, Request Elapsed Time: %6.9lf",
-        service->id,
-        service->name,
-        request_counter,
-        get_elapsed_time_in_seconds(&request_start_time, &request_complete_time));
   }
 }
 
