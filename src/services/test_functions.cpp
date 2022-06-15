@@ -11,7 +11,7 @@ void print_beans_teardown(FramePipeline *frame_pipeline)
   printf("All done printing \"BEANS!\"\n");
 }
 
-void print_beans(FramePipeline *frame_pipeline)
+void print_beans(FramePipeline *frame_pipeline, Service *service, unsigned int request_counter)
 {
   printf("BEANS!\n");
 }
@@ -26,7 +26,7 @@ void print_cornbread_teardown(FramePipeline *frame_pipeline)
   printf("All done printing \"CORNBREAD!\"\n");
 }
 
-void print_cornbread(FramePipeline *frame_pipeline)
+void print_cornbread(FramePipeline *frame_pipeline, Service *service, unsigned int request_counter)
 {
   printf("CORNBREAD!\n");
 }
@@ -41,7 +41,7 @@ void print_pickles_teardown(FramePipeline *frame_pipeline)
   printf("All done printing \"PICKLES!\"\n");
 }
 
-void print_pickles(FramePipeline *frame_pipeline)
+void print_pickles(FramePipeline *frame_pipeline, Service *service, unsigned int request_counter)
 {
   printf("PICKLES!\n");
 }
