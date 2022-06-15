@@ -15,6 +15,7 @@
 #include "services/difference_frame.h"
 #include "services/select_frame.h"
 #include "services/write_frame.h"
+#include "services/do_nothing.h"
 #include "sequencer.hpp"
 #include "utils/error.h"
 #include "utils/log.h"
@@ -33,54 +34,21 @@ FramePipeline frame_pipeline = {
  * @brief The service schedule.
  */
 Schedule schedule = {
-    .frequency = 3,
-    .maximum_iterations = 5600,
+    .frequency = 30,
+    .maximum_iterations = 9000,
     .iteration_counter = 0,
     .sequencer_cpu = 0,
     .services = {
         {
             .id = 1,
-            .name = "Capture Frame",
+            .name = "Do Nothing",
             .period = 1,
             .cpu = 1,
             .exit_flag = FALSE,
             .frame_pipeline = &frame_pipeline,
-            .setup_function = capture_frame_setup,
-            .service_function = capture_frame,
-            .teardown_function = capture_frame_teardown,
-        },
-        {
-            .id = 2,
-            .name = "Difference Frame",
-            .period = 1,
-            .cpu = 2,
-            .exit_flag = FALSE,
-            .frame_pipeline = &frame_pipeline,
-            .setup_function = difference_frame_setup,
-            .service_function = difference_frame,
-            .teardown_function = difference_frame_teardown,
-        },
-        {
-            .id = 3,
-            .name = "Select Frame",
-            .period = 1,
-            .cpu = 2,
-            .exit_flag = FALSE,
-            .frame_pipeline = &frame_pipeline,
-            .setup_function = select_frame_setup,
-            .service_function = select_frame,
-            .teardown_function = select_frame_teardown,
-        },
-        {
-            .id = 4,
-            .name = "Write Frame",
-            .period = 3,
-            .cpu = 2,
-            .exit_flag = FALSE,
-            .frame_pipeline = &frame_pipeline,
-            .setup_function = write_frame_setup,
-            .service_function = write_frame,
-            .teardown_function = write_frame_teardown,
+            .setup_function = do_nothing_setup,
+            .service_function = do_nothing,
+            .teardown_function = do_nothing_teardown,
         },
     }};
 

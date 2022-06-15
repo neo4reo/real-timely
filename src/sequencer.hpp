@@ -9,7 +9,7 @@
 #define TRUE (1)
 #define FALSE (0)
 
-#define NUMBER_OF_SERVICES (4)
+#define NUMBER_OF_SERVICES (1)
 #define NUMBER_OF_FRAMES (100)
 
 #define AVAILABLE_FRAME_QUEUE_NAME "/available_frame_queue"
