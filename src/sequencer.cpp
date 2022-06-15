@@ -33,7 +33,7 @@ FramePipeline frame_pipeline = {
  * @brief The service schedule.
  */
 Schedule schedule = {
-    .frequency = 30,
+    .frequency = 300,
     .maximum_iterations = 9000,
     .iteration_counter = 0,
     .sequencer_cpu = 0,
@@ -41,7 +41,7 @@ Schedule schedule = {
         {
             .id = 1,
             .name = "Capture Frame",
-            .period = 1,
+            .period = 10,
             .cpu = 1,
             .exit_flag = FALSE,
             .frame_pipeline = &frame_pipeline,
@@ -52,7 +52,7 @@ Schedule schedule = {
         {
             .id = 2,
             .name = "Difference Frame",
-            .period = 1,
+            .period = 10,
             .cpu = 2,
             .exit_flag = FALSE,
             .frame_pipeline = &frame_pipeline,
@@ -63,7 +63,7 @@ Schedule schedule = {
         {
             .id = 3,
             .name = "Select Frame",
-            .period = 1,
+            .period = 10,
             .cpu = 2,
             .exit_flag = FALSE,
             .frame_pipeline = &frame_pipeline,
@@ -74,7 +74,7 @@ Schedule schedule = {
         {
             .id = 4,
             .name = "Write Frame",
-            .period = 3,
+            .period = 30,
             .cpu = 2,
             .exit_flag = FALSE,
             .frame_pipeline = &frame_pipeline,
