@@ -14,6 +14,7 @@
 #include "services/capture_frame.h"
 #include "services/difference_frame.h"
 #include "services/select_frame.h"
+#include "services/blur_frame.h"
 #include "services/write_frame.h"
 #include "sequencer.hpp"
 #include "utils/error.h"
@@ -73,6 +74,17 @@ Schedule schedule = {
         },
         {
             .id = 4,
+            .name = "Blur Frame",
+            .period = 3,
+            .cpu = 3,
+            .exit_flag = FALSE,
+            .frame_pipeline = &frame_pipeline,
+            .setup_function = blur_frame_setup,
+            .service_function = blur_frame,
+            .teardown_function = blur_frame_teardown,
+        },
+        {
+            .id = 5,
             .name = "Write Frame",
             .period = 3,
             .cpu = 2,
@@ -293,6 +305,15 @@ void initialize_frame_pipeline(FramePipeline *frame_pipeline)
                                                  &frame_pipeline->message_queue_attributes);
   if (frame_pipeline->selected_frame_queue == -1)
     print_with_errno_and_exit("mq_open() failed opening selected_frame_queue");
+
+  // Initialize the blurred frame queue
+  mq_unlink(BLURRED_FRAME_QUEUE_NAME);
+  frame_pipeline->blurred_frame_queue = mq_open(BLURRED_FRAME_QUEUE_NAME,
+                                                O_CREAT | O_RDWR,
+                                                S_IRWXU,
+                                                &frame_pipeline->message_queue_attributes);
+  if (frame_pipeline->blurred_frame_queue == -1)
+    print_with_errno_and_exit("mq_open() failed opening blurred_frame_queue");
 }
 
 /**
@@ -315,6 +336,10 @@ void uninitialize_frame_pipeline(FramePipeline *frame_pipeline)
   // Close the selected message queue.
   attempt(mq_close(frame_pipeline->selected_frame_queue), "mq_close() selected_frame_queue");
   mq_unlink(SELECTED_FRAME_QUEUE_NAME);
+
+  // Close the blurred message queue.
+  attempt(mq_close(frame_pipeline->blurred_frame_queue), "mq_close() blurred_frame_queue");
+  mq_unlink(BLURRED_FRAME_QUEUE_NAME);
 }
 
 /**
