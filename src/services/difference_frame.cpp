@@ -16,7 +16,7 @@
 #include "../utils/time.h"
 #include "difference_frame.h"
 
-#define DISPLAY_FRAMES FALSE
+#define DISPLAY_FRAMES TRUE
 
 cv::Mat *previous_frame_buffer;
 cv::Mat difference_frame_buffer;
