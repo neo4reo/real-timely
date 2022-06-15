@@ -5,6 +5,6 @@
 
 void do_nothing_setup(FramePipeline *frame_pipeline);
 void do_nothing_teardown(FramePipeline *frame_pipeline);
-void do_nothing(FramePipeline *frame_pipeline);
+void do_nothing(FramePipeline *frame_pipeline, Service *service, unsigned int request_counter);
 
 #endif
