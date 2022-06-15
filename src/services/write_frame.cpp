@@ -55,12 +55,12 @@ void write_frame_teardown(FramePipeline *frame_pipeline)
  */
 void write_frame(FramePipeline *frame_pipeline)
 {
-  // Dequeue the next selected frame.
+  // Dequeue the next blurred frame.
   Frame *frame;
 
-  // Deque and save all frames in the selected frames queue.
+  // Deque and save all frames in the blurred frames queue.
   while (-1 != mq_timedreceive(
-                   frame_pipeline->selected_frame_queue,
+                   frame_pipeline->blurred_frame_queue,
                    (char *)&frame,
                    sizeof(Frame *),
                    NULL,
