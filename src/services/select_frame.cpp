@@ -12,7 +12,7 @@
 #include "../utils/time.h"
 #include "select_frame.h"
 
-#define TICK_DETECTION_THRESHOLD_PERCENTAGE (0.45)
+#define TICK_DETECTION_THRESHOLD_PERCENTAGE (0.38)
 
 double previous_difference_percentage{0};
 Frame *current_best_frame;
@@ -41,8 +41,9 @@ void select_frame_teardown(FramePipeline *frame_pipeline)
  *
  * When a tick event is detected, determined by the relative difference from
  * the previous frame crossing above a certain threshold, the stable frame is
- * added to the que for writing to disk. The stable is reset the next time the
- * relative difference falls back below the threshold.
+ * added to the que for writing to disk and the stable frame is reset to the
+ * current frame. Subsequent frames with lower difference percentages are set
+ * as the favored frame until the next tick event is detected.
  */
 void select_frame(FramePipeline *frame_pipeline, Service *service, unsigned int request_counter)
 {
@@ -76,13 +77,6 @@ void select_frame(FramePipeline *frame_pipeline, Service *service, unsigned int 
             sizeof(Frame *),
             0),
         "mq_send() selected_frame_queue in select_frame");
-  }
-  else if (
-      // This frame crosses below the threshold.
-      previous_difference_percentage >= TICK_DETECTION_THRESHOLD_PERCENTAGE &&
-      frame->difference_percentage < TICK_DETECTION_THRESHOLD_PERCENTAGE)
-  {
-    write_log_with_timer("Select Frame - STABILITY DETECTED, RESETTING BEST FRAME", previous_difference_percentage, frame->difference_percentage);
 
     // Begin a new search for the best frame, staring with this one.
     current_best_frame = frame;
