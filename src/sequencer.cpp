@@ -35,7 +35,6 @@ FramePipeline frame_pipeline = {
  */
 Schedule schedule = {
     .frequency = 300,
-    .maximum_iterations = 9000,
     .maximum_iterations = 57000,
     .iteration_counter = 0,
     .sequencer_cpu = 0,
